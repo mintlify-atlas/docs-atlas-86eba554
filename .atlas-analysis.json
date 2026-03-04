@@ -1,0 +1,98 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Print My Bridge",
+  "projectDescription": "A secure desktop application that creates an HTTP bridge for remote printing to local printers",
+  "theme": "aspen",
+  "primaryColor": "#2563eb",
+  "lightColor": "#60a5fa",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/overview",
+              "configuration/settings",
+              "configuration/security"
+            ]
+          },
+          {
+            "group": "Usage",
+            "pages": [
+              "usage/desktop-app",
+              "usage/headless-mode",
+              "usage/system-tray"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/building-from-source",
+              "advanced/cross-platform-builds",
+              "advanced/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/introduction",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/health",
+              "api/printers",
+              "api/print"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "api/examples/curl",
+              "api/examples/javascript",
+              "api/examples/python"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Remote printing via REST API",
+    "Token-based authentication",
+    "Rate limiting and security",
+    "Cross-platform support (Windows, macOS, Linux)",
+    "System tray integration",
+    "Configurable CORS and file type restrictions",
+    "Support for PDF, HTML, text, and image printing",
+    "GUI and headless modes"
+  ],
+  "publicApiSurface": [
+    "GET /health",
+    "GET /api/printers",
+    "POST /api/print",
+    "PrinterManager::get_available_printers()",
+    "PrinterManager::print()",
+    "Config::load_config()",
+    "Config::save_config()",
+    "generate_secure_token()"
+  ]
+}
