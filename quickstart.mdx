@@ -105,7 +105,7 @@ If you don't see any printers, verify that you have printers installed on your s
 
 ## Make your first print request
 
-Now you're ready to print! The Print My Bridge API accepts print jobs with base64-encoded content.
+Now you're ready to print! The Print My Bridge API accepts print jobs with different content types.
 
 ### Print a text document
 
@@ -116,20 +116,14 @@ curl -X POST \
   -H "x-api-token: YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "SGVsbG8gZnJvbSBQcmludCBNeSBCcmlkZ2UhCgpUaGlzIGlzIGEgdGVzdCBwcmludCBqb2Iu",
+    "content": "Hello from Print My Bridge!\n\nThis is a test print job.",
     "content_type": "text",
     "copies": 1
   }' \
   http://localhost:8765/api/print
 ```
 
-The `content` field contains base64-encoded text. The example above decodes to:
-
-```
-Hello from Print My Bridge!
-
-This is a test print job.
-```
+For text content, you can send plain text directly in the `content` field.
 
 <CodeGroup>
 ```json Success Response
@@ -157,7 +151,7 @@ curl -X POST \
   -H "x-api-token: YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "SGVsbG8gZnJvbSBQcmludCBNeSBCcmlkZ2Uh",
+    "content": "Hello from Print My Bridge!",
     "content_type": "text",
     "printer_name": "Canon PIXMA",
     "copies": 1
@@ -174,16 +168,16 @@ curl -X POST \
   -H "x-api-token: YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "SGVsbG8gZnJvbSBQcmludCBNeSBCcmlkZ2Uh",
+    "content": "Hello from Print My Bridge!",
     "content_type": "text",
     "copies": 3
   }' \
   http://localhost:8765/api/print
 ```
 
-## Encode content for printing
+## Encode content for PDF and image printing
 
-The Print My Bridge API requires content to be base64-encoded. Here's how to encode files:
+For PDF and image content, you need to base64-encode the file data. Here's how to encode files:
 
 <CodeGroup>
 ```bash Linux/macOS
