@@ -1,0 +1,1053 @@
+---
+title: Python Examples
+description: Complete Python examples for the Print My Bridge API using requests and httpx
+---
+
+This guide provides comprehensive Python examples for integrating Print My Bridge into your Python applications and scripts.
+
+## Prerequisites
+
+Before using these examples:
+
+1. Ensure Print My Bridge is running (default: `http://localhost:8765`)
+2. Generate an API token through the application UI
+3. Install required dependencies
+
+## Installation
+
+<Tabs>
+  <Tab title="Requests Library">
+    ```bash
+    pip install requests
+    ```
+  </Tab>
+  <Tab title="HTTPX (Async)">
+    ```bash
+    pip install httpx
+    ```
+  </Tab>
+</Tabs>
+
+## Setup and Configuration
+
+### Using Environment Variables
+
+```python
+import os
+
+# Configuration
+BASE_URL = os.getenv('PRINT_BRIDGE_URL', 'http://localhost:8765')
+API_TOKEN = os.getenv('PRINT_BRIDGE_TOKEN', 'your_api_token_here')
+
+# Headers for authenticated requests
+HEADERS = {
+    'x-api-token': API_TOKEN,
+    'Content-Type': 'application/json'
+}
+```
+
+### Create a .env file
+
+```bash
+PRINT_BRIDGE_URL=http://localhost:8765
+PRINT_BRIDGE_TOKEN=your_api_token_here
+```
+
+Then use python-dotenv:
+```bash
+pip install python-dotenv
+```
+
+```python
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+BASE_URL = os.getenv('PRINT_BRIDGE_URL')
+API_TOKEN = os.getenv('PRINT_BRIDGE_TOKEN')
+```
+
+## Helper Class
+
+<Tabs>
+  <Tab title="Requests (Sync)">
+    ```python
+    import requests
+    import base64
+    from typing import Optional, Dict, List
+
+    class PrintBridgeClient:
+        def __init__(self, base_url: str, api_token: str):
+            self.base_url = base_url.rstrip('/')
+            self.api_token = api_token
+            self.session = requests.Session()
+            self.session.headers.update({'x-api-token': api_token})
+        
+        def _request(self, method: str, endpoint: str, **kwargs) -> Dict:
+            """Make HTTP request to the API."""
+            url = f"{self.base_url}{endpoint}"
+            
+            try:
+                response = self.session.request(method, url, **kwargs)
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.HTTPError as e:
+                error_msg = e.response.json().get('error', str(e))
+                raise Exception(f"API Error: {error_msg}")
+            except Exception as e:
+                raise Exception(f"Request failed: {str(e)}")
+        
+        def check_health(self) -> Dict:
+            """Check if the service is running."""
+            response = requests.get(f"{self.base_url}/health")
+            return response.json()
+        
+        def get_printers(self) -> List[Dict]:
+            """Get list of available printers."""
+            return self._request('GET', '/api/printers')
+        
+        def print_document(
+            self,
+            content: str,
+            content_type: str,
+            printer_name: Optional[str] = None,
+            copies: Optional[int] = None,
+            options: Optional[Dict] = None
+        ) -> Dict:
+            """Print a document.
+            
+            Args:
+                content: Document content (base64 for files, plain text for text)
+                content_type: Type of content ('pdf', 'text', 'html', 'image')
+                printer_name: Name of printer (optional, uses default if not specified)
+                copies: Number of copies (optional, default: 1)
+                options: Print options dict (optional)
+            
+            Returns:
+                Dict with success status, message, and job_id
+            """
+            payload = {
+                'content': content,
+                'content_type': content_type
+            }
+            
+            if printer_name:
+                payload['printer_name'] = printer_name
+            if copies:
+                payload['copies'] = copies
+            if options:
+                payload['options'] = options
+            
+            return self._request('POST', '/api/print', json=payload)
+        
+        @staticmethod
+        def encode_file(file_path: str) -> str:
+            """Read a file and encode it to base64."""
+            with open(file_path, 'rb') as f:
+                return base64.b64encode(f.read()).decode('utf-8')
+        
+        def print_pdf(
+            self,
+            file_path: str,
+            printer_name: Optional[str] = None,
+            copies: int = 1
+        ) -> Dict:
+            """Print a PDF file."""
+            content = self.encode_file(file_path)
+            return self.print_document(content, 'pdf', printer_name, copies)
+        
+        def print_text(
+            self,
+            text: str,
+            printer_name: Optional[str] = None,
+            copies: int = 1
+        ) -> Dict:
+            """Print plain text."""
+            return self.print_document(text, 'text', printer_name, copies)
+        
+        def print_html(
+            self,
+            html: str,
+            printer_name: Optional[str] = None,
+            copies: int = 1
+        ) -> Dict:
+            """Print HTML content."""
+            return self.print_document(html, 'html', printer_name, copies)
+        
+        def print_image(
+            self,
+            file_path: str,
+            printer_name: Optional[str] = None,
+            copies: int = 1
+        ) -> Dict:
+            """Print an image file."""
+            content = self.encode_file(file_path)
+            return self.print_document(content, 'image', printer_name, copies)
+
+    # Initialize client
+    client = PrintBridgeClient(
+        base_url='http://localhost:8765',
+        api_token='your_api_token_here'
+    )
+    ```
+  </Tab>
+  <Tab title="HTTPX (Async)">
+    ```python
+    import httpx
+    import base64
+    from typing import Optional, Dict, List
+
+    class AsyncPrintBridgeClient:
+        def __init__(self, base_url: str, api_token: str):
+            self.base_url = base_url.rstrip('/')
+            self.api_token = api_token
+            self.headers = {'x-api-token': api_token}
+        
+        async def _request(self, method: str, endpoint: str, **kwargs) -> Dict:
+            """Make async HTTP request to the API."""
+            url = f"{self.base_url}{endpoint}"
+            
+            # Merge headers
+            headers = {**self.headers, **kwargs.pop('headers', {})}
+            
+            async with httpx.AsyncClient() as client:
+                try:
+                    response = await client.request(
+                        method, url, headers=headers, **kwargs
+                    )
+                    response.raise_for_status()
+                    return response.json()
+                except httpx.HTTPStatusError as e:
+                    error_msg = e.response.json().get('error', str(e))
+                    raise Exception(f"API Error: {error_msg}")
+                except Exception as e:
+                    raise Exception(f"Request failed: {str(e)}")
+        
+        async def check_health(self) -> Dict:
+            """Check if the service is running."""
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{self.base_url}/health")
+                return response.json()
+        
+        async def get_printers(self) -> List[Dict]:
+            """Get list of available printers."""
+            return await self._request('GET', '/api/printers')
+        
+        async def print_document(
+            self,
+            content: str,
+            content_type: str,
+            printer_name: Optional[str] = None,
+            copies: Optional[int] = None,
+            options: Optional[Dict] = None
+        ) -> Dict:
+            """Print a document asynchronously."""
+            payload = {
+                'content': content,
+                'content_type': content_type
+            }
+            
+            if printer_name:
+                payload['printer_name'] = printer_name
+            if copies:
+                payload['copies'] = copies
+            if options:
+                payload['options'] = options
+            
+            return await self._request('POST', '/api/print', json=payload)
+        
+        @staticmethod
+        def encode_file(file_path: str) -> str:
+            """Read a file and encode it to base64."""
+            with open(file_path, 'rb') as f:
+                return base64.b64encode(f.read()).decode('utf-8')
+        
+        async def print_pdf(
+            self,
+            file_path: str,
+            printer_name: Optional[str] = None,
+            copies: int = 1
+        ) -> Dict:
+            """Print a PDF file asynchronously."""
+            content = self.encode_file(file_path)
+            return await self.print_document(content, 'pdf', printer_name, copies)
+        
+        async def print_text(
+            self,
+            text: str,
+            printer_name: Optional[str] = None,
+            copies: int = 1
+        ) -> Dict:
+            """Print plain text asynchronously."""
+            return await self.print_document(text, 'text', printer_name, copies)
+        
+        async def print_html(
+            self,
+            html: str,
+            printer_name: Optional[str] = None,
+            copies: int = 1
+        ) -> Dict:
+            """Print HTML content asynchronously."""
+            return await self.print_document(html, 'html', printer_name, copies)
+        
+        async def print_image(
+            self,
+            file_path: str,
+            printer_name: Optional[str] = None,
+            copies: int = 1
+        ) -> Dict:
+            """Print an image file asynchronously."""
+            content = self.encode_file(file_path)
+            return await self.print_document(content, 'image', printer_name, copies)
+
+    # Initialize async client
+    async_client = AsyncPrintBridgeClient(
+        base_url='http://localhost:8765',
+        api_token='your_api_token_here'
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Basic Examples
+
+### Check Service Health
+
+<Tabs>
+  <Tab title="Requests">
+    ```python
+    import requests
+
+    def check_health():
+        response = requests.get('http://localhost:8765/health')
+        data = response.json()
+        print(f"Service: {data['service']}")
+        print(f"Status: {data['status']}")
+        print(f"Version: {data['version']}")
+        return data
+
+    # Run
+    health = check_health()
+    ```
+  </Tab>
+  <Tab title="Using Client Class">
+    ```python
+    from print_bridge_client import PrintBridgeClient
+
+    client = PrintBridgeClient(
+        base_url='http://localhost:8765',
+        api_token='your_api_token_here'
+    )
+
+    try:
+        health = client.check_health()
+        print(f"Service is running: {health['service']} v{health['version']}")
+    except Exception as e:
+        print(f"Health check failed: {e}")
+    ```
+  </Tab>
+  <Tab title="HTTPX (Async)">
+    ```python
+    import asyncio
+    import httpx
+
+    async def check_health():
+        async with httpx.AsyncClient() as client:
+            response = await client.get('http://localhost:8765/health')
+            data = response.json()
+            print(f"Service: {data['service']}")
+            print(f"Status: {data['status']}")
+            print(f"Version: {data['version']}")
+            return data
+
+    # Run
+    asyncio.run(check_health())
+    ```
+  </Tab>
+</Tabs>
+
+### List Available Printers
+
+<Tabs>
+  <Tab title="Requests">
+    ```python
+    import requests
+
+    def list_printers():
+        headers = {'x-api-token': 'your_api_token_here'}
+        response = requests.get(
+            'http://localhost:8765/api/printers',
+            headers=headers
+        )
+        response.raise_for_status()
+        
+        printers = response.json()
+        
+        print("Available Printers:")
+        for printer in printers:
+            default = " (Default)" if printer['is_default'] else ""
+            color = " [Color]" if printer['supports_color'] else ""
+            print(f"  - {printer['name']}{default}{color}")
+            print(f"    Status: {printer['status']}")
+            print(f"    Paper sizes: {', '.join(printer['paper_sizes'])}")
+        
+        return printers
+
+    # Run
+    printers = list_printers()
+    ```
+  </Tab>
+  <Tab title="Using Client Class">
+    ```python
+    from print_bridge_client import PrintBridgeClient
+
+    client = PrintBridgeClient(
+        base_url='http://localhost:8765',
+        api_token='your_api_token_here'
+    )
+
+    try:
+        printers = client.get_printers()
+        
+        # Find default printer
+        default_printer = next(
+            (p for p in printers if p['is_default']),
+            None
+        )
+        
+        if default_printer:
+            print(f"Default printer: {default_printer['name']}")
+        
+        # Find color printers
+        color_printers = [p for p in printers if p['supports_color']]
+        print(f"Color printers: {', '.join(p['name'] for p in color_printers)}")
+        
+    except Exception as e:
+        print(f"Failed to list printers: {e}")
+    ```
+  </Tab>
+</Tabs>
+
+### Print Text Document
+
+<Tabs>
+  <Tab title="Simple">
+    ```python
+    import requests
+    import json
+
+    def print_text(text, printer_name=None, copies=1):
+        headers = {
+            'x-api-token': 'your_api_token_here',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'content': text,
+            'content_type': 'text',
+            'copies': copies
+        }
+        
+        if printer_name:
+            payload['printer_name'] = printer_name
+        
+        response = requests.post(
+            'http://localhost:8765/api/print',
+            headers=headers,
+            json=payload
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        print(f"Print successful: {result['message']}")
+        print(f"Job ID: {result['job_id']}")
+        return result
+
+    # Examples
+    print_text("Hello, World!\nThis is a test print.")
+    print_text("Invoice #12345\nTotal: $99.99", "HP LaserJet Pro", 2)
+    ```
+  </Tab>
+  <Tab title="Using Client Class">
+    ```python
+    from print_bridge_client import PrintBridgeClient
+
+    client = PrintBridgeClient(
+        base_url='http://localhost:8765',
+        api_token='your_api_token_here'
+    )
+
+    try:
+        # Print to default printer
+        result = client.print_text("Receipt\nItem 1: $10\nItem 2: $20\nTotal: $30")
+        print(f"Printed successfully: {result['job_id']}")
+        
+        # Print to specific printer with multiple copies
+        result = client.print_text(
+            "Label text",
+            printer_name="Canon PIXMA",
+            copies=3
+        )
+        print(f"Printed {result['message']}")
+        
+    except Exception as e:
+        print(f"Print failed: {e}")
+    ```
+  </Tab>
+</Tabs>
+
+### Print PDF Document
+
+<Tabs>
+  <Tab title="Requests">
+    ```python
+    import requests
+    import base64
+
+    def print_pdf(file_path, printer_name=None, copies=1):
+        # Read and encode PDF file
+        with open(file_path, 'rb') as f:
+            pdf_content = base64.b64encode(f.read()).decode('utf-8')
+        
+        headers = {
+            'x-api-token': 'your_api_token_here',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'content': pdf_content,
+            'content_type': 'pdf',
+            'copies': copies
+        }
+        
+        if printer_name:
+            payload['printer_name'] = printer_name
+        
+        response = requests.post(
+            'http://localhost:8765/api/print',
+            headers=headers,
+            json=payload
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        print(f"PDF printed successfully: {result['job_id']}")
+        return result
+
+    # Examples
+    print_pdf('invoice.pdf')
+    print_pdf('document.pdf', 'HP LaserJet Pro', 2)
+    ```
+  </Tab>
+  <Tab title="Using Client Class">
+    ```python
+    from print_bridge_client import PrintBridgeClient
+
+    client = PrintBridgeClient(
+        base_url='http://localhost:8765',
+        api_token='your_api_token_here'
+    )
+
+    try:
+        # Print PDF to default printer
+        result = client.print_pdf('invoice.pdf')
+        print(f"Printed: {result['job_id']}")
+        
+        # Print PDF with options
+        result = client.print_pdf(
+            'document.pdf',
+            printer_name='HP LaserJet Pro',
+            copies=2
+        )
+        print(f"Print job submitted: {result['job_id']}")
+        
+    except FileNotFoundError:
+        print("File not found")
+    except Exception as e:
+        print(f"Print failed: {e}")
+    ```
+  </Tab>
+</Tabs>
+
+### Print HTML Content
+
+<Tabs>
+  <Tab title="Simple HTML">
+    ```python
+    from print_bridge_client import PrintBridgeClient
+
+    client = PrintBridgeClient(
+        base_url='http://localhost:8765',
+        api_token='your_api_token_here'
+    )
+
+    html_content = """
+    <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; }
+                h1 { color: #333; }
+                table { width: 100%; border-collapse: collapse; }
+                td { padding: 8px; border-bottom: 1px solid #ddd; }
+            </style>
+        </head>
+        <body>
+            <h1>Receipt</h1>
+            <p>Date: 2024-03-04</p>
+            <table>
+                <tr><td>Item 1</td><td>$10.00</td></tr>
+                <tr><td>Item 2</td><td>$20.00</td></tr>
+                <tr><td><strong>Total</strong></td><td><strong>$30.00</strong></td></tr>
+            </table>
+        </body>
+    </html>
+    """
+
+    try:
+        result = client.print_html(html_content)
+        print(f"HTML printed: {result['job_id']}")
+    except Exception as e:
+        print(f"Print failed: {e}")
+    ```
+  </Tab>
+  <Tab title="Dynamic Invoice">
+    ```python
+    from print_bridge_client import PrintBridgeClient
+    from datetime import datetime
+    from typing import List, Dict
+
+    client = PrintBridgeClient(
+        base_url='http://localhost:8765',
+        api_token='your_api_token_here'
+    )
+
+    def generate_invoice_html(invoice_data: Dict) -> str:
+        """Generate HTML invoice from data."""
+        items_html = ""
+        for item in invoice_data['items']:
+            total = item['quantity'] * item['price']
+            items_html += f"""
+                <tr>
+                    <td>{item['description']}</td>
+                    <td>{item['quantity']}</td>
+                    <td>${item['price']:.2f}</td>
+                    <td>${total:.2f}</td>
+                </tr>
+            """
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <style>
+                    body {{ font-family: 'Helvetica', sans-serif; padding: 20px; }}
+                    .header {{ text-align: center; margin-bottom: 30px; }}
+                    .info {{ margin-bottom: 20px; }}
+                    table {{ width: 100%; border-collapse: collapse; }}
+                    th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }}
+                    .total {{ font-size: 1.2em; font-weight: bold; }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>INVOICE</h1>
+                    <p>Invoice #{invoice_data['invoice_number']}</p>
+                </div>
+                <div class="info">
+                    <p><strong>Date:</strong> {invoice_data['date']}</p>
+                    <p><strong>Customer:</strong> {invoice_data['customer']}</p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {items_html}
+                    </tbody>
+                </table>
+                <p class="total">Total: ${invoice_data['total']:.2f}</p>
+            </body>
+        </html>
+        """
+
+    def print_invoice(invoice_data: Dict, printer_name: str = None):
+        """Generate and print invoice."""
+        html = generate_invoice_html(invoice_data)
+        return client.print_html(html, printer_name)
+
+    # Usage
+    invoice = {
+        'invoice_number': 'INV-2024-001',
+        'date': datetime.now().strftime('%Y-%m-%d'),
+        'customer': 'Acme Corp',
+        'items': [
+            {'description': 'Product A', 'quantity': 2, 'price': 25.00},
+            {'description': 'Product B', 'quantity': 1, 'price': 50.00}
+        ],
+        'total': 100.00
+    }
+
+    try:
+        result = print_invoice(invoice, 'HP LaserJet Pro')
+        print(f"Invoice printed: {result['job_id']}")
+    except Exception as e:
+        print(f"Failed to print invoice: {e}")
+    ```
+  </Tab>
+</Tabs>
+
+### Print Image
+
+<Tabs>
+  <Tab title="Requests">
+    ```python
+    import requests
+    import base64
+
+    def print_image(file_path, printer_name=None):
+        # Read and encode image file
+        with open(file_path, 'rb') as f:
+            image_content = base64.b64encode(f.read()).decode('utf-8')
+        
+        headers = {
+            'x-api-token': 'your_api_token_here',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'content': image_content,
+            'content_type': 'image'
+        }
+        
+        if printer_name:
+            payload['printer_name'] = printer_name
+        
+        response = requests.post(
+            'http://localhost:8765/api/print',
+            headers=headers,
+            json=payload
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        print(f"Image printed successfully: {result['job_id']}")
+        return result
+
+    # Example
+    print_image('photo.png', 'Canon PIXMA')
+    ```
+  </Tab>
+  <Tab title="Using Client Class">
+    ```python
+    from print_bridge_client import PrintBridgeClient
+
+    client = PrintBridgeClient(
+        base_url='http://localhost:8765',
+        api_token='your_api_token_here'
+    )
+
+    try:
+        result = client.print_image('photo.png', 'Canon PIXMA')
+        print(f"Image printed: {result['job_id']}")
+    except FileNotFoundError:
+        print("Image file not found")
+    except Exception as e:
+        print(f"Print failed: {e}")
+    ```
+  </Tab>
+</Tabs>
+
+## Advanced Examples
+
+### Print with Options
+
+```python
+from print_bridge_client import PrintBridgeClient
+
+client = PrintBridgeClient(
+    base_url='http://localhost:8765',
+    api_token='your_api_token_here'
+)
+
+def print_with_options(file_path, printer_name, options):
+    """Print document with advanced options."""
+    content = client.encode_file(file_path)
+    
+    return client.print_document(
+        content=content,
+        content_type='pdf',
+        printer_name=printer_name,
+        copies=options.get('copies', 1),
+        options={
+            'paper_size': options.get('paper_size', 'A4'),
+            'orientation': options.get('orientation', 'portrait'),
+            'color': options.get('color', False),
+            'duplex': options.get('duplex', False)
+        }
+    )
+
+# Usage
+try:
+    result = print_with_options(
+        file_path='document.pdf',
+        printer_name='HP LaserJet Pro',
+        options={
+            'copies': 2,
+            'paper_size': 'Letter',
+            'orientation': 'landscape',
+            'color': False,
+            'duplex': True
+        }
+    )
+    print(f"Printed with options: {result['job_id']}")
+except Exception as e:
+    print(f"Print failed: {e}")
+```
+
+### Error Handling
+
+```python
+from print_bridge_client import PrintBridgeClient
+import requests
+
+client = PrintBridgeClient(
+    base_url='http://localhost:8765',
+    api_token='your_api_token_here'
+)
+
+def safe_print(content, content_type, printer_name=None):
+    """Print with comprehensive error handling."""
+    try:
+        result = client.print_document(
+            content=content,
+            content_type=content_type,
+            printer_name=printer_name
+        )
+        return {'success': True, 'data': result}
+    
+    except Exception as e:
+        error_msg = str(e)
+        
+        # Handle specific error types
+        if 'No autorizado' in error_msg:
+            return {
+                'success': False,
+                'error': 'UNAUTHORIZED',
+                'message': 'Invalid API token'
+            }
+        elif 'Límite de velocidad excedido' in error_msg:
+            return {
+                'success': False,
+                'error': 'RATE_LIMIT',
+                'message': 'Too many requests. Please try again later.'
+            }
+        elif 'Formato no soportado' in error_msg:
+            return {
+                'success': False,
+                'error': 'UNSUPPORTED_FORMAT',
+                'message': 'File format not supported'
+            }
+        elif 'Archivo demasiado grande' in error_msg:
+            return {
+                'success': False,
+                'error': 'FILE_TOO_LARGE',
+                'message': 'File exceeds maximum size limit'
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'UNKNOWN',
+                'message': error_msg
+            }
+
+# Usage
+result = safe_print('Test document', 'text', 'HP LaserJet Pro')
+if result['success']:
+    print(f"Printed successfully: {result['data']['job_id']}")
+else:
+    print(f"Print failed ({result['error']}): {result['message']}")
+```
+
+### Batch Printing
+
+```python
+from print_bridge_client import PrintBridgeClient
+import time
+from typing import List, Dict
+
+client = PrintBridgeClient(
+    base_url='http://localhost:8765',
+    api_token='your_api_token_here'
+)
+
+def batch_print_pdfs(file_paths: List[str], printer_name: str = None, delay: float = 0.5):
+    """Print multiple PDF files with rate limiting."""
+    results = []
+    
+    for i, file_path in enumerate(file_paths, 1):
+        try:
+            print(f"Printing {i}/{len(file_paths)}: {file_path}")
+            result = client.print_pdf(file_path, printer_name)
+            results.append({
+                'file': file_path,
+                'success': True,
+                'job_id': result['job_id']
+            })
+            print(f"  ✓ Job ID: {result['job_id']}")
+            
+            # Rate limiting delay
+            if i < len(file_paths):
+                time.sleep(delay)
+                
+        except Exception as e:
+            results.append({
+                'file': file_path,
+                'success': False,
+                'error': str(e)
+            })
+            print(f"  ✗ Failed: {e}")
+    
+    # Summary
+    successful = sum(1 for r in results if r['success'])
+    print(f"\nBatch complete: {successful}/{len(file_paths)} successful")
+    
+    return results
+
+# Usage
+files = ['invoice1.pdf', 'invoice2.pdf', 'invoice3.pdf']
+results = batch_print_pdfs(files, 'HP LaserJet Pro')
+```
+
+### Async Batch Printing (HTTPX)
+
+```python
+import asyncio
+from typing import List, Dict
+from async_print_bridge_client import AsyncPrintBridgeClient
+
+async_client = AsyncPrintBridgeClient(
+    base_url='http://localhost:8765',
+    api_token='your_api_token_here'
+)
+
+async def batch_print_async(file_paths: List[str], printer_name: str = None):
+    """Print multiple files concurrently."""
+    tasks = [
+        async_client.print_pdf(file_path, printer_name)
+        for file_path in file_paths
+    ]
+    
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Process results
+    for i, (file_path, result) in enumerate(zip(file_paths, results), 1):
+        if isinstance(result, Exception):
+            print(f"{i}. {file_path}: Failed - {result}")
+        else:
+            print(f"{i}. {file_path}: Success - Job {result['job_id']}")
+    
+    return results
+
+# Usage
+files = ['doc1.pdf', 'doc2.pdf', 'doc3.pdf']
+asyncio.run(batch_print_async(files, 'HP LaserJet Pro'))
+```
+
+### Django Integration Example
+
+```python
+# views.py
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.conf import settings
+from print_bridge_client import PrintBridgeClient
+import base64
+
+client = PrintBridgeClient(
+    base_url=settings.PRINT_BRIDGE_URL,
+    api_token=settings.PRINT_BRIDGE_TOKEN
+)
+
+@require_http_methods(["POST"])
+def print_document(request):
+    """Django view to handle print requests."""
+    try:
+        # Get uploaded file
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            return JsonResponse({'error': 'No file provided'}, status=400)
+        
+        # Get parameters
+        printer_name = request.POST.get('printer_name')
+        copies = int(request.POST.get('copies', 1))
+        
+        # Determine content type
+        content_type = 'pdf' if uploaded_file.name.endswith('.pdf') else 'image'
+        
+        # Encode file content
+        file_content = base64.b64encode(uploaded_file.read()).decode('utf-8')
+        
+        # Print document
+        result = client.print_document(
+            content=file_content,
+            content_type=content_type,
+            printer_name=printer_name,
+            copies=copies
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'job_id': result['job_id'],
+            'message': result['message']
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+@require_http_methods(["GET"])
+def list_printers(request):
+    """Django view to list available printers."""
+    try:
+        printers = client.get_printers()
+        return JsonResponse({'printers': printers})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+```
+
+## Best Practices
+
+1. **Environment Variables**: Always use environment variables for API tokens
+2. **Error Handling**: Wrap all API calls in try-except blocks
+3. **Rate Limiting**: Implement delays between bulk print operations
+4. **File Validation**: Validate file size and type before encoding
+5. **Connection Pooling**: Reuse session objects for multiple requests
+6. **Timeouts**: Set appropriate timeouts for print operations
+7. **Logging**: Log print operations for audit trails
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def print_with_logging(file_path, printer_name=None):
+    """Print with detailed logging."""
+    logger.info(f"Attempting to print: {file_path}")
+    
+    try:
+        result = client.print_pdf(file_path, printer_name)
+        logger.info(f"Print successful: Job {result['job_id']}")
+        return result
+    except Exception as e:
+        logger.error(f"Print failed for {file_path}: {e}")
+        raise
+```

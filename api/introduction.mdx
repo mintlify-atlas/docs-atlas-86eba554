@@ -1,0 +1,212 @@
+---
+title: API Introduction
+description: Overview of the Print My Bridge REST API for remote printing operations
+---
+
+# API Introduction
+
+The Print My Bridge API provides a secure HTTP interface for sending print jobs to local printers. Built with Rust and Warp, it offers token-based authentication, rate limiting, and support for multiple file formats.
+
+## Base URL
+
+The API runs locally on your machine:
+
+```
+http://localhost:8765
+```
+
+The default port is `8765`, but this can be configured in the application settings.
+
+## API Endpoints
+
+The API exposes the following endpoints:
+
+### Health Check
+- **GET** `/health` - Check API status (no authentication required)
+
+### Printer Management
+- **GET** `/api/printers` - List all available printers (authentication required)
+
+### Print Operations
+- **POST** `/api/print` - Send a print job (authentication required)
+
+## Request Format
+
+All API requests use standard HTTP methods with JSON request bodies for POST operations.
+
+### Content Type
+
+For print requests, use `application/json` as the content type:
+
+```bash
+Content-Type: application/json
+```
+
+### Authentication Header
+
+Authenticated endpoints require the `x-api-token` header:
+
+```bash
+x-api-token: YOUR_API_TOKEN
+```
+
+## Response Format
+
+All API responses are returned in JSON format with appropriate HTTP status codes.
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "message": "Operation completed successfully",
+  "job_id": "abc123"
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "message": "Error description"
+}
+```
+
+## HTTP Status Codes
+
+The API uses standard HTTP status codes:
+
+- `200 OK` - Request successful
+- `401 Unauthorized` - Invalid or missing API token
+- `413 Payload Too Large` - File exceeds size limit
+- `429 Too Many Requests` - Rate limit exceeded
+- `500 Internal Server Error` - Server error
+
+## Rate Limiting
+
+The API implements rate limiting to prevent abuse:
+
+- **Default limit**: 60 requests per minute per IP address
+- **Window**: 60 seconds (rolling window)
+- **Configurable**: Adjust via `rate_limit_per_minute` in configuration
+
+When rate limited, the API returns:
+
+```json
+{
+  "error": "Rate limit exceeded",
+  "message": "Too many requests. Please try again later."
+}
+```
+
+HTTP Status: `429 Too Many Requests`
+
+## CORS Configuration
+
+The API supports Cross-Origin Resource Sharing (CORS) with configurable origins:
+
+### Allowed Headers
+- `content-type`
+- `authorization`
+- `x-api-token`
+
+### Allowed Methods
+- `GET`
+- `POST`
+- `OPTIONS`
+
+### Default Behavior
+
+By default, the API allows all origins (`*`). For production use, configure specific allowed origins:
+
+```toml
+allowed_origins = ["https://yourapp.com", "https://admin.yourapp.com"]
+```
+
+## File Size Limits
+
+The API enforces file size limits to prevent resource exhaustion:
+
+- **Default limit**: 50 MB
+- **Configurable**: Adjust via `max_file_size_mb` in configuration
+- **Request body limit**: 50 MB (configured in src-tauri/src/api/mod.rs:89)
+
+Files exceeding the limit will return:
+
+```json
+{
+  "error": "File too large",
+  "message": "File size exceeds maximum allowed size"
+}
+```
+
+## Supported File Types
+
+The API supports the following content types:
+
+- **PDF** - `pdf`
+- **HTML** - `html`
+- **Plain Text** - `text`
+- **Images** - `image`
+
+These are configured in `allowed_file_types` and validated before processing.
+
+## Getting Started
+
+### 1. Verify API is Running
+
+Check the health endpoint:
+
+```bash
+curl http://localhost:8765/health
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "service": "print-my-bridge",
+  "version": "0.1.0"
+}
+```
+
+### 2. Generate an API Token
+
+Use the Print My Bridge application UI to generate a secure API token, or configure one in the settings.
+
+### 3. List Available Printers
+
+```bash
+curl -H "x-api-token: YOUR_TOKEN" \
+  http://localhost:8765/api/printers
+```
+
+### 4. Send a Print Job
+
+```bash
+curl -X POST \
+  -H "x-api-token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "printer_name": "HP LaserJet Pro",
+    "content": "<base64_encoded_content>",
+    "content_type": "pdf",
+    "copies": 1
+  }' \
+  http://localhost:8765/api/print
+```
+
+## Security Considerations
+
+- The API binds to `127.0.0.1` (localhost) by default for security
+- All endpoints except `/health` require authentication
+- Rate limiting prevents brute force attacks
+- File type and size validation prevents malicious uploads
+- CORS can be restricted to specific origins in production
+
+## Next Steps
+
+- Learn about [Authentication](/api/authentication) and token management
+- Explore detailed [Endpoint Documentation](/api/printers)
+- Review [Print Request Examples](/api/print)

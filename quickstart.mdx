@@ -1,80 +1,379 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Get started with Print My Bridge in minutes - from installation to your first print job
 ---
 
-## Get started in three steps
+This guide will walk you through making your first print request with Print My Bridge in just a few minutes.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+- Print My Bridge installed and running (see [Installation](/installation))
+- A printer connected to your system
+- curl or a similar HTTP client (for testing)
+
+<Note>
+You can verify Print My Bridge is running by checking for the application icon in your system tray.
+</Note>
+
+## Generate an API token
+
+All API requests to Print My Bridge require authentication with a bearer token.
+
+<Steps>
+  <Step title="Open Print My Bridge">
+    Click the Print My Bridge icon in your system tray or launch the application from your applications menu.
+  </Step>
+  
+  <Step title="Generate a new token">
+    In the main window, click the **Generate New Token** button. A secure 32-character token will be generated for you.
+  </Step>
+  
+  <Step title="Copy the token">
+    Click the **Copy** button next to the token to copy it to your clipboard. The token will look something like:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```
+    AbCdEfGh1234567890XyZaBcDeFgH12
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Warning>
+    Keep your token secure! Anyone with this token can send print jobs to your printers. Never commit tokens to version control or share them publicly.
+    </Warning>
+  </Step>
+</Steps>
 
-### Step 2: Deploy your changes
+## Verify the server is running
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+Before making authenticated requests, verify the HTTP server is running by checking the health endpoint:
+
+```bash
+curl http://localhost:8765/health
+```
+
+<CodeGroup>
+```json Response
+{
+  "status": "ok",
+  "service": "print-my-bridge",
+  "version": "0.1.0"
+}
+```
+</CodeGroup>
+
+<Tip>
+The `/health` endpoint doesn't require authentication, making it perfect for monitoring whether Print My Bridge is running.
+</Tip>
+
+## List available printers
+
+Now let's use your API token to list all printers connected to your system:
+
+```bash
+curl -H "x-api-token: YOUR_TOKEN" \
+  http://localhost:8765/api/printers
+```
+
+Replace `YOUR_TOKEN` with the token you generated. You'll receive a response like:
+
+<CodeGroup>
+```json Response
+{
+  "printers": [
+    {
+      "name": "HP LaserJet Pro",
+      "status": "ready",
+      "is_default": true,
+      "supports_color": true,
+      "paper_sizes": ["A4", "Letter", "Legal"]
+    },
+    {
+      "name": "Canon PIXMA",
+      "status": "ready",
+      "is_default": false,
+      "supports_color": true,
+      "paper_sizes": ["A4", "Letter", "4x6"]
+    }
+  ]
+}
+```
+</CodeGroup>
+
+<Note>
+If you don't see any printers, verify that you have printers installed on your system and that they are online.
+</Note>
+
+## Make your first print request
+
+Now you're ready to print! The Print My Bridge API accepts print jobs with base64-encoded content.
+
+### Print a text document
+
+Let's start with a simple text document:
+
+```bash
+curl -X POST \
+  -H "x-api-token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "SGVsbG8gZnJvbSBQcmludCBNeSBCcmlkZ2UhCgpUaGlzIGlzIGEgdGVzdCBwcmludCBqb2Iu",
+    "content_type": "text",
+    "copies": 1
+  }' \
+  http://localhost:8765/api/print
+```
+
+The `content` field contains base64-encoded text. The example above decodes to:
+
+```
+Hello from Print My Bridge!
+
+This is a test print job.
+```
+
+<CodeGroup>
+```json Success Response
+{
+  "success": true,
+  "message": "Document sent to printer successfully",
+  "job_id": "12345"
+}
+```
+
+```json Error Response
+{
+  "success": false,
+  "message": "Printer not found"
+}
+```
+</CodeGroup>
+
+### Print to a specific printer
+
+To print to a specific printer instead of the default, add the `printer_name` field:
+
+```bash
+curl -X POST \
+  -H "x-api-token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "SGVsbG8gZnJvbSBQcmludCBNeSBCcmlkZ2Uh",
+    "content_type": "text",
+    "printer_name": "Canon PIXMA",
+    "copies": 1
+  }' \
+  http://localhost:8765/api/print
+```
+
+### Print multiple copies
+
+To print multiple copies, set the `copies` field:
+
+```bash
+curl -X POST \
+  -H "x-api-token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "SGVsbG8gZnJvbSBQcmludCBNeSBCcmlkZ2Uh",
+    "content_type": "text",
+    "copies": 3
+  }' \
+  http://localhost:8765/api/print
+```
+
+## Encode content for printing
+
+The Print My Bridge API requires content to be base64-encoded. Here's how to encode files:
+
+<CodeGroup>
+```bash Linux/macOS
+# Encode a file to base64
+base64 -w 0 document.pdf
+
+# Or encode and print directly
+curl -X POST \
+  -H "x-api-token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"content\": \"$(base64 -w 0 document.pdf)\",
+    \"content_type\": \"pdf\"
+  }" \
+  http://localhost:8765/api/print
+```
+
+```powershell Windows (PowerShell)
+# Encode a file to base64
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("document.pdf"))
+
+# Or use certutil
+certutil -encode document.pdf document.b64
+```
+
+```python Python
+import base64
+
+# Encode a file
+with open('document.pdf', 'rb') as f:
+    encoded = base64.b64encode(f.read()).decode('utf-8')
+    print(encoded)
+```
+
+```javascript JavaScript/Node.js
+const fs = require('fs');
+
+// Encode a file
+const fileBuffer = fs.readFileSync('document.pdf');
+const encoded = fileBuffer.toString('base64');
+console.log(encoded);
+```
+</CodeGroup>
+
+## Complete example with error handling
+
+Here's a complete example in Python that includes error handling:
+
+```python print_example.py
+import requests
+import base64
+import json
+
+# Configuration
+API_URL = 'http://localhost:8765'
+API_TOKEN = 'YOUR_TOKEN_HERE'
+
+def print_document(file_path, content_type, printer_name=None, copies=1):
+    """Send a print job to Print My Bridge"""
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    # Read and encode the file
+    with open(file_path, 'rb') as f:
+        content = base64.b64encode(f.read()).decode('utf-8')
+    
+    # Prepare the request
+    headers = {
+        'x-api-token': API_TOKEN,
+        'Content-Type': 'application/json'
+    }
+    
+    payload = {
+        'content': content,
+        'content_type': content_type,
+        'copies': copies
+    }
+    
+    if printer_name:
+        payload['printer_name'] = printer_name
+    
+    # Send the print request
+    try:
+        response = requests.post(
+            f'{API_URL}/api/print',
+            headers=headers,
+            json=payload
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        if result.get('success'):
+            print(f"✓ Print job submitted: {result.get('job_id')}")
+            return True
+        else:
+            print(f"✗ Print failed: {result.get('message')}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        print(f"✗ Request failed: {e}")
+        return False
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+# Example usage
+if __name__ == '__main__':
+    # Print a PDF document
+    print_document('document.pdf', 'pdf', copies=1)
+    
+    # Print to a specific printer
+    print_document('receipt.txt', 'text', printer_name='Receipt Printer')
+```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+<Tip>
+For production use, store your API token in environment variables instead of hardcoding it:
 
-### Step 3: Go live
+```python
+import os
+API_TOKEN = os.environ.get('PRINT_MY_BRIDGE_TOKEN')
+```
+</Tip>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+## Troubleshooting
+
+If you encounter issues during the quick start:
+
+### Connection refused
+
+```bash
+curl: (7) Failed to connect to localhost port 8765: Connection refused
+```
+
+**Solution**: Ensure Print My Bridge is running. Check your system tray for the application icon.
+
+### Unauthorized error
+
+```json
+{
+  "error": "Unauthorized"
+}
+```
+
+**Solution**: Verify you're including the correct token in the `x-api-token` header.
+
+### Rate limit exceeded
+
+```json
+{
+  "error": "Rate limit exceeded"
+}
+```
+
+**Solution**: You've exceeded the rate limit (default: 60 requests/minute). Wait a minute and try again, or increase the limit in the configuration file.
+
+### Unsupported format
+
+```json
+{
+  "success": false,
+  "message": "Unsupported format"
+}
+```
+
+**Solution**: Ensure the `content_type` is one of the allowed types (`pdf`, `html`, `text`, `image`). Check your configuration file to see which types are enabled.
+
+### Printer not found
+
+```json
+{
+  "success": false,
+  "message": "Printer not found"
+}
+```
+
+**Solution**: Verify the printer name exactly matches one of the printers returned by `/api/printers`. Printer names are case-sensitive.
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you've made your first print request, you can:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Explore all available endpoints and options
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Customize Print My Bridge settings
+  </Card>
+  
+  <Card title="Security" icon="shield" href="/security">
+    Learn about security best practices
+  </Card>
+  
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting">
+    Find solutions to common issues
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

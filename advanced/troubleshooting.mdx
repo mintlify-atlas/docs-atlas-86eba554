@@ -1,0 +1,497 @@
+---
+title: Troubleshooting
+description: Solutions to common issues and debugging tips for Print My Bridge
+---
+
+## Overview
+
+This guide covers common issues you may encounter when using Print My Bridge and provides solutions for debugging and resolving problems.
+
+## Common Issues
+
+### Bridge Not Running
+
+**Symptoms**: Cannot connect to the API, no response from endpoints
+
+<Steps>
+  <Step title="Check if the application is running">
+    Look for the Print My Bridge icon in your system tray:
+
+    - **Windows**: Bottom-right corner near the clock
+    - **macOS**: Top-right corner in the menu bar
+    - **Linux**: System tray area (varies by desktop environment)
+  </Step>
+
+  <Step title="Verify the configuration file">
+    Check that the configuration file exists and is valid:
+
+    <CodeGroup>
+    ```bash Windows
+    # Location:
+    %APPDATA%\print-my-bridge\print-my-bridge.toml
+
+    # Check if it exists:
+    type "%APPDATA%\print-my-bridge\print-my-bridge.toml"
+    ```
+
+    ```bash macOS
+    # Location:
+    ~/Library/Application Support/print-my-bridge/print-my-bridge.toml
+
+    # Check if it exists:
+    cat "~/Library/Application Support/print-my-bridge/print-my-bridge.toml"
+    ```
+
+    ```bash Linux
+    # Location:
+    ~/.config/print-my-bridge/print-my-bridge.toml
+
+    # Check if it exists:
+    cat ~/.config/print-my-bridge/print-my-bridge.toml
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Check if the configured port is available">
+    <CodeGroup>
+    ```bash Windows
+    netstat -ano | findstr :8765
+    ```
+
+    ```bash macOS/Linux
+    lsof -i :8765
+    # Or
+    netstat -an | grep 8765
+    ```
+    </CodeGroup>
+
+    If another application is using the port, either:
+    - Stop that application
+    - Change the port in the configuration file
+  </Step>
+
+  <Step title="Restart the application">
+    1. Right-click the system tray icon
+    2. Select "Quit" or "Exit"
+    3. Launch Print My Bridge again
+  </Step>
+</Steps>
+
+### Connection Refused
+
+**Symptoms**: Error messages like "Connection refused" or "ECONNREFUSED"
+
+<Accordion title="Solution 1: Verify host and port">
+  Check that you're connecting to the correct host and port:
+
+  ```bash
+  # Default configuration
+  curl http://127.0.0.1:8765/health
+  ```
+
+  Expected response:
+  ```json
+  {
+    "status": "ok",
+    "service": "print-my-bridge",
+    "version": "0.1.0"
+  }
+  ```
+
+  If this fails:
+  1. Check the configuration file for the correct `host` and `port`
+  2. Ensure the application is running
+  3. Try with `localhost` instead of `127.0.0.1` or vice versa
+</Accordion>
+
+<Accordion title="Solution 2: Check firewall settings">
+  The firewall may be blocking the connection:
+
+  <CodeGroup>
+  ```powershell Windows
+  # Check if port is blocked
+  Test-NetConnection -ComputerName 127.0.0.1 -Port 8765
+
+  # Add firewall rule if needed
+  New-NetFirewallRule -DisplayName "Print My Bridge" -Direction Inbound -LocalPort 8765 -Protocol TCP -Action Allow
+  ```
+
+  ```bash macOS
+  # Check firewall status
+  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
+
+  # Allow the application
+  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add /Applications/Print\ My\ Bridge.app
+  ```
+
+  ```bash Linux
+  # Check firewall status (ufw)
+  sudo ufw status
+
+  # Allow the port
+  sudo ufw allow 8765/tcp
+  ```
+  </CodeGroup>
+</Accordion>
+
+<Accordion title="Solution 3: Check binding configuration">
+  By default, Print My Bridge binds to `127.0.0.1` (localhost only). To access from other devices:
+
+  Edit the configuration file:
+  ```toml
+  # For localhost only (secure):
+  host = "127.0.0.1"
+
+  # For network access (less secure):
+  host = "0.0.0.0"
+  ```
+
+  <Warning>
+    Binding to `0.0.0.0` exposes the service to your entire network. Ensure you have proper authentication configured.
+  </Warning>
+</Accordion>
+
+### Print Job Fails
+
+**Symptoms**: API accepts the job but printing doesn't occur
+
+<Steps>
+  <Step title="Verify the printer is connected and online">
+    <CodeGroup>
+    ```powershell Windows
+    Get-Printer | Format-Table Name, PrinterStatus, JobCount
+    ```
+
+    ```bash macOS
+    lpstat -p
+    # Or use System Preferences > Printers & Scanners
+    ```
+
+    ```bash Linux
+    lpstat -p
+    # Or
+    lpoptions -d default_printer
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Check if the file type is allowed">
+    Review the `allowed_file_types` in your configuration:
+
+    ```toml print-my-bridge.toml
+    allowed_file_types = [".pdf", ".txt", ".doc", ".docx"]
+    ```
+
+    If your file type isn't listed, add it to the configuration.
+  </Step>
+
+  <Step title="Ensure the file size doesn't exceed the limit">
+    Check the `max_file_size_mb` setting:
+
+    ```toml print-my-bridge.toml
+    max_file_size_mb = 10
+    ```
+
+    Increase if needed for larger documents.
+  </Step>
+
+  <Step title="Test with a simple document">
+    Create a simple text file to test:
+
+    ```bash
+    echo "Test print" > test.txt
+
+    curl -X POST \
+      -H "Authorization: Bearer YOUR_TOKEN" \
+      -F "file=@test.txt" \
+      http://localhost:8765/api/print
+    ```
+  </Step>
+
+  <Step title="Check printer permissions">
+    Ensure the application has permission to access the printer:
+
+    - **macOS**: System Preferences > Security & Privacy > Privacy > Automation
+    - **Windows**: Run the application with appropriate user permissions
+    - **Linux**: Ensure the user is in the `lp` or `lpadmin` group
+
+    ```bash Linux
+    sudo usermod -a -G lp $USER
+    sudo usermod -a -G lpadmin $USER
+    # Log out and back in for changes to take effect
+    ```
+  </Step>
+</Steps>
+
+### CORS Issues
+
+**Symptoms**: Browser console shows CORS errors like "blocked by CORS policy"
+
+<Accordion title="Solution: Update allowed origins">
+  Edit your configuration file to allow specific origins:
+
+  ```toml print-my-bridge.toml
+  # Allow all origins (development only):
+  allowed_origins = ["*"]
+
+  # Allow specific origins (recommended for production):
+  allowed_origins = [
+    "https://yourdomain.com",
+    "https://app.yourdomain.com",
+    "http://localhost:3000"
+  ]
+  ```
+
+  <Warning>
+    Using `"*"` for `allowed_origins` in production is not recommended for security reasons. Always specify the exact origins that should have access.
+  </Warning>
+
+  After updating, restart Print My Bridge for changes to take effect.
+</Accordion>
+
+### Authentication Errors
+
+**Symptoms**: "Unauthorized" or "Invalid token" responses
+
+<Steps>
+  <Step title="Verify token is included in request">
+    Ensure the Authorization header is properly formatted:
+
+    ```bash
+    curl -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+      http://localhost:8765/api/printers
+    ```
+
+    Common mistakes:
+    - Missing "Bearer" prefix
+    - Extra spaces in the header
+    - Incorrect token value
+  </Step>
+
+  <Step title="Generate a new token">
+    If the token is invalid:
+    1. Open the Print My Bridge application
+    2. Go to Settings or API Configuration
+    3. Generate a new token
+    4. Update your application with the new token
+  </Step>
+
+  <Step title="Check token storage">
+    Tokens are stored in the configuration file. Verify:
+
+    <CodeGroup>
+    ```bash macOS
+    cat "~/Library/Application Support/print-my-bridge/print-my-bridge.toml"
+    ```
+
+    ```bash Linux
+    cat ~/.config/print-my-bridge/print-my-bridge.toml
+    ```
+
+    ```powershell Windows
+    type "%APPDATA%\print-my-bridge\print-my-bridge.toml"
+    ```
+    </CodeGroup>
+  </Step>
+</Steps>
+
+### Rate Limiting
+
+**Symptoms**: "Too Many Requests" (429) errors
+
+<Accordion title="Solution: Adjust rate limits">
+  The default rate limit is 60 requests per minute. To adjust:
+
+  ```toml print-my-bridge.toml
+  # Increase rate limit
+  rate_limit_per_minute = 120
+
+  # Or disable rate limiting (not recommended)
+  rate_limit_per_minute = 0
+  ```
+
+  Restart the application after making changes.
+</Accordion>
+
+## Debug Mode
+
+For detailed debugging information, run Print My Bridge from the terminal:
+
+<CodeGroup>
+```bash macOS
+# Navigate to the application
+cd "Print My Bridge.app/Contents/MacOS"
+
+# Run with debug output
+./"Print My Bridge"
+```
+
+```bash Linux
+# Run from terminal
+./print-my-bridge
+
+# Or if installed via package manager
+print-my-bridge
+```
+
+```powershell Windows
+# Navigate to installation directory
+cd "C:\Program Files\Print My Bridge"
+
+# Run with console output
+.\print-my-bridge.exe
+```
+</CodeGroup>
+
+### Enable Detailed Logging
+
+Set the `RUST_LOG` environment variable for verbose output:
+
+<CodeGroup>
+```bash macOS/Linux
+export RUST_LOG=debug
+./print-my-bridge
+
+# Or for a specific module:
+export RUST_LOG=print_my_bridge::api=trace
+./print-my-bridge
+```
+
+```powershell Windows
+$env:RUST_LOG="debug"
+.\print-my-bridge.exe
+
+# Or for a specific module:
+$env:RUST_LOG="print_my_bridge::api=trace"
+.\print-my-bridge.exe
+```
+</CodeGroup>
+
+### Run from Source with Debug
+
+For development debugging:
+
+```bash
+cd src-tauri
+RUST_LOG=debug cargo run
+```
+
+## Log Files
+
+Application logs are stored at:
+
+<CodeGroup>
+```text Windows
+%APPDATA%\print-my-bridge\logs\print-my-bridge.log
+
+# View logs:
+type "%APPDATA%\print-my-bridge\logs\print-my-bridge.log"
+
+# Monitor in real-time:
+Get-Content "%APPDATA%\print-my-bridge\logs\print-my-bridge.log" -Wait
+```
+
+```text macOS
+~/Library/Logs/print-my-bridge/print-my-bridge.log
+
+# View logs:
+cat "~/Library/Logs/print-my-bridge/print-my-bridge.log"
+
+# Monitor in real-time:
+tail -f "~/Library/Logs/print-my-bridge/print-my-bridge.log"
+```
+
+```text Linux
+~/.local/share/print-my-bridge/logs/print-my-bridge.log
+
+# View logs:
+cat ~/.local/share/print-my-bridge/logs/print-my-bridge.log
+
+# Monitor in real-time:
+tail -f ~/.local/share/print-my-bridge/logs/print-my-bridge.log
+```
+</CodeGroup>
+
+## Build Issues
+
+For build-related problems, see the dedicated troubleshooting section in [Building from Source](/advanced/building-from-source#troubleshooting-build-issues).
+
+## Performance Issues
+
+### High CPU Usage
+
+<Accordion title="Solution: Check rate limiting">
+  If you're receiving many requests:
+
+  1. Enable or adjust rate limiting in configuration
+  2. Check for infinite request loops in client applications
+  3. Monitor the logs for unusual activity
+</Accordion>
+
+<Accordion title="Solution: Update to latest version">
+  Ensure you're running the latest version of Print My Bridge:
+
+  ```bash
+  # Check current version
+  curl http://localhost:8765/health
+
+  # Download latest release from GitHub
+  # https://github.com/your-username/print-my-bridge/releases
+  ```
+</Accordion>
+
+### High Memory Usage
+
+<Accordion title="Solution: Check file size limits">
+  Large files can consume significant memory:
+
+  ```toml print-my-bridge.toml
+  # Reduce maximum file size
+  max_file_size_mb = 5
+  ```
+</Accordion>
+
+## Getting Help
+
+If you're still experiencing issues:
+
+<Steps>
+  <Step title="Check existing issues">
+    Search the [GitHub Issues](https://github.com/your-username/print-my-bridge/issues) page for similar problems.
+  </Step>
+
+  <Step title="Gather diagnostic information">
+    Collect the following:
+    - Print My Bridge version (from `/health` endpoint)
+    - Operating system and version
+    - Configuration file (remove sensitive tokens)
+    - Relevant log excerpts
+    - Steps to reproduce the issue
+  </Step>
+
+  <Step title="Create a new issue">
+    If no existing issue matches your problem, [create a new issue](https://github.com/your-username/print-my-bridge/issues/new) with:
+    - Clear description of the problem
+    - Steps to reproduce
+    - Expected vs actual behavior
+    - Diagnostic information from step 2
+    - Relevant log files or error messages
+  </Step>
+</Steps>
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="Building from Source" icon="code" href="/advanced/building-from-source">
+    Build and compile Print My Bridge from source code
+  </Card>
+  <Card title="Cross-Platform Builds" icon="laptop" href="/advanced/cross-platform-builds">
+    Create builds for different platforms and architectures
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Complete configuration reference and options
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Full API documentation and endpoint details
+  </Card>
+</CardGroup>

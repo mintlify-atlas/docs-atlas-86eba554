@@ -1,0 +1,421 @@
+---
+title: Cross-Platform Builds
+description: Build Print My Bridge for different platforms and architectures
+---
+
+## Overview
+
+Print My Bridge supports building for multiple platforms and architectures. This guide covers how to create builds for macOS (Intel and Apple Silicon), Windows, and Linux from any supported platform.
+
+## Build Targets
+
+Print My Bridge supports the following build targets:
+
+| Platform | Architecture | Target Triple |
+|----------|-------------|---------------|
+| macOS Intel | x86_64 | `x86_64-apple-darwin` |
+| macOS Apple Silicon | ARM64 | `aarch64-apple-darwin` |
+| macOS Universal | x86_64 + ARM64 | `universal-apple-darwin` |
+| Windows | x86_64 | `x86_64-pc-windows-msvc` |
+| Linux | x86_64 | `x86_64-unknown-linux-gnu` |
+
+## macOS Builds
+
+### Intel (x86_64)
+
+Build for Intel-based Macs:
+
+<Steps>
+  <Step title="Add the target">
+    ```bash
+    rustup target add x86_64-apple-darwin
+    ```
+  </Step>
+
+  <Step title="Build for the target">
+    ```bash
+    cd src-tauri
+    cargo tauri build --target x86_64-apple-darwin
+    ```
+  </Step>
+
+  <Step title="Find the artifacts">
+    The built application will be located at:
+    ```bash
+    src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Print My Bridge.app
+    ```
+  </Step>
+</Steps>
+
+### Apple Silicon (ARM64)
+
+Build for M1/M2/M3 Macs:
+
+<Steps>
+  <Step title="Add the target">
+    ```bash
+    rustup target add aarch64-apple-darwin
+    ```
+  </Step>
+
+  <Step title="Build for the target">
+    ```bash
+    cd src-tauri
+    cargo tauri build --target aarch64-apple-darwin
+    ```
+  </Step>
+
+  <Step title="Find the artifacts">
+    ```bash
+    src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Print My Bridge.app
+    ```
+  </Step>
+</Steps>
+
+### Universal Binary
+
+Create a universal binary that runs on both Intel and Apple Silicon Macs:
+
+<Steps>
+  <Step title="Add both targets">
+    ```bash
+    rustup target add x86_64-apple-darwin
+    rustup target add aarch64-apple-darwin
+    ```
+  </Step>
+
+  <Step title="Build universal binary">
+    ```bash
+    cd src-tauri
+    cargo tauri build --target universal-apple-darwin
+    ```
+
+    This command:
+    - Builds for both x86_64 and aarch64
+    - Combines both binaries using `lipo`
+    - Creates a single `.app` bundle that works on all Macs
+  </Step>
+
+  <Step title="Verify the universal binary">
+    ```bash
+    lipo -archs "src-tauri/target/universal-apple-darwin/release/bundle/macos/Print My Bridge.app/Contents/MacOS/Print My Bridge"
+    # Output: x86_64 arm64
+    ```
+  </Step>
+</Steps>
+
+<Info>
+  **Recommendation**: For distribution, always create universal binaries to support all Mac users with a single download.
+</Info>
+
+## Windows Builds
+
+### Windows x86_64
+
+Build for 64-bit Windows:
+
+<Steps>
+  <Step title="Add the target">
+    ```bash
+    rustup target add x86_64-pc-windows-msvc
+    ```
+  </Step>
+
+  <Step title="Build for Windows">
+    <CodeGroup>
+    ```bash From Windows
+    cd src-tauri
+    cargo tauri build --target x86_64-pc-windows-msvc
+    ```
+
+    ```bash From Linux/macOS (Cross-compilation)
+    # Cross-compilation from non-Windows platforms is complex
+    # Recommended: Use GitHub Actions or Windows VM
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Locate the artifacts">
+    ```powershell
+    # MSI Installer:
+    src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi\Print My Bridge_*.msi
+
+    # Executable:
+    src-tauri\target\x86_64-pc-windows-msvc\release\print-my-bridge.exe
+    ```
+  </Step>
+</Steps>
+
+### Windows Requirements
+
+<Warning>
+  Building for Windows requires:
+  - Visual Studio 2022 or Visual Studio Build Tools
+  - Windows SDK
+  - MSVC toolchain
+
+  Install from: https://visualstudio.microsoft.com/downloads/
+</Warning>
+
+## Linux Builds
+
+### Linux x86_64
+
+Build for 64-bit Linux distributions:
+
+<Steps>
+  <Step title="Add the target">
+    ```bash
+    rustup target add x86_64-unknown-linux-gnu
+    ```
+  </Step>
+
+  <Step title="Build for Linux">
+    ```bash
+    cd src-tauri
+    cargo tauri build --target x86_64-unknown-linux-gnu
+    ```
+  </Step>
+
+  <Step title="Find the artifacts">
+    Multiple package formats are created:
+
+    ```bash
+    # Debian/Ubuntu package:
+    src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/print-my-bridge_*.deb
+
+    # AppImage (universal Linux):
+    src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/print-my-bridge_*.AppImage
+
+    # Binary:
+    src-tauri/target/x86_64-unknown-linux-gnu/release/print-my-bridge
+    ```
+  </Step>
+</Steps>
+
+### Linux Dependencies
+
+Ensure these packages are installed before building:
+
+<CodeGroup>
+```bash Ubuntu/Debian
+sudo apt install libwebkit2gtk-4.0-dev \
+  build-essential \
+  curl \
+  wget \
+  file \
+  libssl-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev
+```
+
+```bash Fedora
+sudo dnf install webkit2gtk4.0-devel \
+  openssl-devel \
+  curl \
+  wget \
+  file \
+  libappindicator-gtk3-devel \
+  librsvg2-devel
+```
+
+```bash Arch Linux
+sudo pacman -S webkit2gtk \
+  base-devel \
+  curl \
+  wget \
+  file \
+  openssl \
+  gtk3 \
+  libappindicator-gtk3 \
+  librsvg
+```
+</CodeGroup>
+
+## Cross-Compilation
+
+### Same OS Cross-Compilation
+
+You can build for different architectures on the same OS:
+
+```bash
+# On macOS, build for Intel from Apple Silicon (or vice versa):
+cargo tauri build --target x86_64-apple-darwin
+
+# On Linux, this generally works without issues
+cargo tauri build --target x86_64-unknown-linux-gnu
+```
+
+### Cross-OS Compilation
+
+Cross-compiling between different operating systems is complex:
+
+<Warning>
+  **Limitations**:
+  - Building for Windows from macOS/Linux requires complex toolchain setup
+  - Building for macOS from Windows/Linux is not supported without a Mac
+  - For production builds, use native builds or CI/CD pipelines
+</Warning>
+
+### Recommended Approach: CI/CD
+
+For building on multiple platforms, use GitHub Actions or similar CI/CD:
+
+```yaml .github/workflows/build.yml
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform:
+          - os: macos-latest
+            target: universal-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install dependencies (Ubuntu)
+        if: matrix.platform.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install libwebkit2gtk-4.0-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+      - name: Build
+        run: |
+          cd src-tauri
+          cargo install tauri-cli
+          cargo tauri build --target ${{ matrix.platform.target }}
+```
+
+## Build Optimization Tips
+
+### Reduce Binary Size
+
+The default release profile already optimizes for size:
+
+```toml Cargo.toml
+[profile.release]
+opt-level = 3        # Or use "z" for size optimization
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+```
+
+For even smaller binaries:
+```toml
+[profile.release]
+opt-level = "z"      # Optimize for size instead of speed
+```
+
+### Faster Builds
+
+For faster development builds:
+
+```bash
+# Use the dev profile (already optimized for compile speed)
+cargo tauri dev
+
+# Or use fewer codegen units in release:
+[profile.release]
+codegen-units = 4    # Faster builds, slightly larger binary
+```
+
+### Parallel Builds
+
+Build for multiple targets in parallel:
+
+```bash
+# Build all macOS targets
+cargo tauri build --target x86_64-apple-darwin &
+cargo tauri build --target aarch64-apple-darwin &
+wait
+
+# Combine into universal binary
+lipo -create \
+  target/x86_64-apple-darwin/release/print-my-bridge \
+  target/aarch64-apple-darwin/release/print-my-bridge \
+  -output target/universal/print-my-bridge
+```
+
+## Build Script
+
+Use the included build script to build for all platforms:
+
+```bash
+# If a build-all.sh script exists:
+./build-all.sh
+
+# Or create your own:
+cat > build-all.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "Building for macOS Universal..."
+cargo tauri build --target universal-apple-darwin
+
+echo "Building for Windows..."
+cargo tauri build --target x86_64-pc-windows-msvc
+
+echo "Building for Linux..."
+cargo tauri build --target x86_64-unknown-linux-gnu
+
+echo "All builds complete!"
+EOF
+
+chmod +x build-all.sh
+```
+
+## Verifying Builds
+
+After building, verify each platform:
+
+### macOS
+```bash
+# Check architecture
+lipo -info "target/universal-apple-darwin/release/bundle/macos/Print My Bridge.app/Contents/MacOS/Print My Bridge"
+
+# Test the app
+open "target/universal-apple-darwin/release/bundle/macos/Print My Bridge.app"
+```
+
+### Windows
+```powershell
+# Check binary
+.\target\x86_64-pc-windows-msvc\release\print-my-bridge.exe --version
+
+# Test MSI installer
+msiexec /i "target\x86_64-pc-windows-msvc\release\bundle\msi\Print My Bridge_*.msi"
+```
+
+### Linux
+```bash
+# Check binary
+./target/x86_64-unknown-linux-gnu/release/print-my-bridge --version
+
+# Test AppImage
+chmod +x target/x86_64-unknown-linux-gnu/release/bundle/appimage/print-my-bridge_*.AppImage
+./target/x86_64-unknown-linux-gnu/release/bundle/appimage/print-my-bridge_*.AppImage
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Building from Source" icon="code" href="/advanced/building-from-source">
+    Complete guide to setting up your build environment
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/advanced/troubleshooting">
+    Solutions to common build and runtime issues
+  </Card>
+</CardGroup>

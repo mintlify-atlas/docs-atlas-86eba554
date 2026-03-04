@@ -1,0 +1,356 @@
+---
+title: Print Document
+description: Send a document to a printer for printing
+---
+
+## Overview
+
+The print endpoint allows you to send documents to a printer connected to the system. It supports multiple content types including PDF, HTML, plain text, and images. Documents are sent as base64-encoded content in the request body.
+
+## Endpoint
+
+```http
+POST /api/print
+```
+
+## Authentication
+
+**Required.** This endpoint requires a valid API token to be included in the request header.
+
+```http
+x-api-token: YOUR_API_TOKEN
+```
+
+## Request Body
+
+<ParamField body="printer_name" type="string" optional>
+  The name of the printer to use. If not specified, the system default printer will be used. You can get available printer names from the `/api/printers` endpoint.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  The document content encoded as a base64 string. The encoding depends on the `content_type`:
+  - For `pdf` and `image`: Base64-encoded binary data
+  - For `html`: Raw HTML string (not base64-encoded)
+  - For `text`: Raw text string (not base64-encoded)
+</ParamField>
+
+<ParamField body="content_type" type="string" required>
+  The type of content being printed. Must be one of:
+  - `pdf` - PDF documents (requires base64-encoded content)
+  - `html` - HTML documents (rendered to PDF before printing)
+  - `text` - Plain text documents
+  - `image` - Image files (requires base64-encoded content)
+</ParamField>
+
+<ParamField body="copies" type="integer" optional default={1}>
+  Number of copies to print. Must be a positive integer. Defaults to 1 if not specified.
+</ParamField>
+
+<ParamField body="options" type="object" optional>
+  Print options for customizing the print job.
+  
+  <ParamField body="options.paper_size" type="string" optional>
+    The paper size to use. Common values: `A4`, `Letter`, `Legal`, `A3`. Must be supported by the target printer.
+  </ParamField>
+  
+  <ParamField body="options.orientation" type="string" optional>
+    Page orientation. Values: `portrait` or `landscape`.
+  </ParamField>
+  
+  <ParamField body="options.color" type="boolean" optional>
+    Whether to print in color (`true`) or black and white (`false`). Only applies to printers that support color printing.
+  </ParamField>
+  
+  <ParamField body="options.duplex" type="boolean" optional>
+    Enable duplex (double-sided) printing if supported by the printer.
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the print job was successfully submitted.
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  A human-readable message describing the result of the operation.
+</ResponseField>
+
+<ResponseField name="job_id" type="string" optional>
+  A unique identifier for the print job. Can be used for tracking purposes. May be `null` for some content types or if job tracking is not available.
+</ResponseField>
+
+## Example Requests
+
+### Print a PDF Document
+
+```bash
+curl -X POST http://localhost:8765/api/print \
+  -H "Content-Type: application/json" \
+  -H "x-api-token: your-api-token-here" \
+  -d '{
+    "printer_name": "HP_LaserJet_Pro",
+    "content": "JVBERi0xLjQKJeLjz9MKMSAwIG9iaiA8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmogPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFsgMyAwIFIgXQovQ291bnQgMQo+PgplbmRvYmoKMyAwIG9iaiA8PAovVHlwZSAvUGFnZQovUGFyZW50IDIgMCBSCi9SZXNvdXJjZXMgPDwKL0ZvbnQgPDwKL0YxIDQgMCBSCj4+Cj4+Ci9NZWRpYUJveCBbIDAgMCA2MTIgNzkyIF0KL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iago...",
+    "content_type": "pdf",
+    "copies": 2,
+    "options": {
+      "paper_size": "Letter",
+      "color": false,
+      "duplex": true
+    }
+  }'
+```
+
+### Print HTML Content
+
+```bash
+curl -X POST http://localhost:8765/api/print \
+  -H "Content-Type: application/json" \
+  -H "x-api-token: your-api-token-here" \
+  -d '{
+    "content": "<html><body><h1>Invoice #12345</h1><p>Total: $250.00</p></body></html>",
+    "content_type": "html",
+    "copies": 1,
+    "options": {
+      "paper_size": "A4",
+      "orientation": "portrait"
+    }
+  }'
+```
+
+### Print Plain Text
+
+```bash
+curl -X POST http://localhost:8765/api/print \
+  -H "Content-Type: application/json" \
+  -H "x-api-token: your-api-token-here" \
+  -d '{
+    "content": "Receipt\n========\nItem 1: $10.00\nItem 2: $15.00\nTotal: $25.00",
+    "content_type": "text",
+    "copies": 1
+  }'
+```
+
+### Print an Image
+
+```bash
+curl -X POST http://localhost:8765/api/print \
+  -H "Content-Type: application/json" \
+  -H "x-api-token: your-api-token-here" \
+  -d '{
+    "printer_name": "Canon_PIXMA",
+    "content": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "content_type": "image",
+    "copies": 1,
+    "options": {
+      "color": true,
+      "paper_size": "4x6"
+    }
+  }'
+```
+
+## Example Response
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "message": "PDF enviado a impresora exitosamente",
+  "job_id": "HP_LaserJet_Pro-123"
+}
+```
+
+### Using with JavaScript
+
+```javascript
+async function printPDF(pdfBase64, printerName, copies = 1) {
+  const response = await fetch('http://localhost:8765/api/print', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-token': 'your-api-token-here'
+    },
+    body: JSON.stringify({
+      printer_name: printerName,
+      content: pdfBase64,
+      content_type: 'pdf',
+      copies: copies,
+      options: {
+        paper_size: 'Letter',
+        duplex: true
+      }
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Print failed');
+  }
+  
+  const result = await response.json();
+  console.log(`Print job submitted: ${result.job_id}`);
+  return result;
+}
+
+// Convert File to base64 and print
+async function printFile(file, printerName) {
+  const reader = new FileReader();
+  
+  return new Promise((resolve, reject) => {
+    reader.onload = async () => {
+      const base64 = reader.result.split(',')[1]; // Remove data:...; prefix
+      try {
+        const result = await printPDF(base64, printerName);
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+```
+
+## Limits and Restrictions
+
+### File Size Limit
+
+The maximum file size is **50 MB** by default. This is enforced at the HTTP server level. Requests exceeding this limit will be rejected with a `413 Payload Too Large` error.
+
+Additionally, the configured `max_file_size_mb` setting (default: 10 MB) applies to the decoded content. If your base64-encoded content decodes to a file larger than this limit, the request will be rejected.
+
+```json
+{
+  "error": "FileTooLarge",
+  "message": "File size exceeds maximum allowed size"
+}
+```
+
+### Rate Limiting
+
+This endpoint is subject to rate limiting (default: 60 requests per minute per IP address). Exceeding this limit will result in a `429 Too Many Requests` error.
+
+```json
+{
+  "error": "RateLimitExceeded",
+  "message": "Too many requests. Please try again later."
+}
+```
+
+### Allowed File Types
+
+Only configured file types are allowed. By default, the following content types are supported:
+- `pdf`
+- `html`
+- `text`
+- `image`
+
+Attempting to print an unsupported content type will result in an error:
+
+```json
+{
+  "error": "UnsupportedFormat",
+  "message": "Content type 'docx' is not supported"
+}
+```
+
+## Error Responses
+
+### 400 Bad Request
+
+Returned when the request is malformed or missing required fields.
+
+```json
+{
+  "error": "Bad Request",
+  "message": "Missing required field: content"
+}
+```
+
+### 401 Unauthorized
+
+Returned when the API token is missing or invalid.
+
+```json
+{
+  "error": "Unauthorized",
+  "message": "Invalid or missing API token"
+}
+```
+
+### 413 Payload Too Large
+
+Returned when the request body exceeds 50 MB.
+
+```json
+{
+  "error": "Payload Too Large",
+  "message": "Request body exceeds maximum size of 50 MB"
+}
+```
+
+### 429 Too Many Requests
+
+Returned when the rate limit has been exceeded.
+
+```json
+{
+  "error": "RateLimitExceeded",
+  "message": "Too many requests. Please try again later."
+}
+```
+
+### 500 Internal Server Error
+
+Returned when there's an error processing or printing the document.
+
+```json
+{
+  "error": "PrintError",
+  "message": "Failed to send document to printer: Printer not responding"
+}
+```
+
+## Content Type Specifications
+
+### PDF (`content_type: "pdf"`)
+
+- Content must be base64-encoded binary PDF data
+- Sent directly to printer via CUPS/lpstat
+- Supports all print options
+- Returns job ID for tracking
+
+### HTML (`content_type: "html"`)
+
+- Content is raw HTML string (not base64-encoded)
+- Converted to PDF using wkhtmltopdf before printing
+- Supports CSS styling and formatting
+- Default margins: 0.75 inches on all sides
+- Default paper size: A4
+
+### Text (`content_type: "text"`)
+
+- Content is plain text string (not base64-encoded)
+- Sent directly to printer
+- Basic formatting only
+- Best for receipts and simple documents
+
+### Image (`content_type: "image"`)
+
+- Content must be base64-encoded image data
+- Supports common formats: PNG, JPEG, GIF
+- Sent directly to printer
+- Best with color printers and appropriate paper sizes
+
+## Best Practices
+
+1. **Check printer availability** using `/api/printers` before submitting print jobs
+2. **Validate file size** before encoding to avoid exceeding limits
+3. **Use appropriate content types** for your document format
+4. **Specify printer names** explicitly rather than relying on defaults
+5. **Handle errors gracefully** and provide feedback to users
+6. **Implement retry logic** for transient failures
+7. **Respect rate limits** by implementing client-side throttling
+8. **Store job IDs** for tracking and troubleshooting

@@ -1,0 +1,384 @@
+---
+title: Security Configuration
+description: Configure authentication, rate limiting, CORS, and other security features to protect your Print My Bridge installation
+---
+
+Security is a critical aspect of Print My Bridge. This guide covers how to properly configure authentication, rate limiting, CORS, and other security features to protect your print server.
+
+## Token Authentication
+
+Print My Bridge uses bearer token authentication to secure API endpoints. All endpoints except `/health` require a valid token.
+
+### Generating a Secure Token
+
+You can generate a secure token in two ways:
+
+<Tabs>
+  <Tab title="Via UI">
+    1. Open Print My Bridge
+    2. Navigate to Settings
+    3. Click "Generate Token"
+    4. Copy the generated token
+    5. Save the configuration
+  </Tab>
+  
+  <Tab title="Programmatically">
+    The token generation function is available in `src-tauri/src/config/mod.rs:68-81`:
+    
+    ```rust
+    pub fn generate_secure_token() -> String {
+        use rand::Rng;
+        const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+                                abcdefghijklmnopqrstuvwxyz\
+                                0123456789";
+        let mut rng = rand::thread_rng();
+        
+        (0..32)
+            .map(|_| {
+                let idx = rng.gen_range(0..CHARSET.len());
+                CHARSET[idx] as char
+            })
+            .collect()
+    }
+    ```
+    
+    This generates a 32-character random token using alphanumeric characters.
+  </Tab>
+</Tabs>
+
+### Configuring the Token
+
+Add the token to your `print-my-bridge.toml` configuration file:
+
+```toml
+api_token = "KmWv0HH0MW2Ex9VrmpSiDkddSUk2141K"
+```
+
+<Warning>
+  Never commit your `api_token` to version control. Keep it secret and rotate it regularly.
+</Warning>
+
+### Using the Token in API Requests
+
+Include the token in the `Authorization` header with the `Bearer` scheme:
+
+```bash
+curl -H "Authorization: Bearer KmWv0HH0MW2Ex9VrmpSiDkddSUk2141K" \
+     http://localhost:8765/api/printers
+```
+
+**JavaScript example:**
+
+```javascript
+fetch('http://localhost:8765/api/printers', {
+  headers: {
+    'Authorization': 'Bearer KmWv0HH0MW2Ex9VrmpSiDkddSUk2141K'
+  }
+})
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+**Python example:**
+
+```python
+import requests
+
+headers = {
+    'Authorization': 'Bearer KmWv0HH0MW2Ex9VrmpSiDkddSUk2141K'
+}
+
+response = requests.get('http://localhost:8765/api/printers', headers=headers)
+print(response.json())
+```
+
+### Disabling Authentication
+
+To disable authentication (not recommended for production), set `api_token` to `null` or omit it:
+
+```toml
+api_token = null
+```
+
+<Warning>
+  Disabling authentication exposes your print server to anyone who can access the network. Only do this in trusted development environments.
+</Warning>
+
+## Rate Limiting Configuration
+
+Rate limiting prevents abuse by limiting the number of requests a client can make within a time window.
+
+### Configuring Rate Limits
+
+Set the maximum number of requests per minute in your configuration:
+
+```toml
+rate_limit_per_minute = 60
+```
+
+### Rate Limit Behavior
+
+When a client exceeds the rate limit:
+
+1. They receive a `429 Too Many Requests` response
+2. The response includes a `Retry-After` header indicating when they can retry
+3. The rate limit counter resets after one minute
+
+### Recommended Rate Limits
+
+<AccordionGroup>
+  <Accordion title="Development Environment">
+    ```toml
+    rate_limit_per_minute = 120
+    ```
+    Higher limits for testing and development.
+  </Accordion>
+  
+  <Accordion title="Low-Volume Production">
+    ```toml
+    rate_limit_per_minute = 30
+    ```
+    Conservative limits for occasional printing.
+  </Accordion>
+  
+  <Accordion title="High-Volume Production">
+    ```toml
+    rate_limit_per_minute = 300
+    ```
+    Higher limits for busy environments with many concurrent users.
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  Monitor your actual usage patterns and adjust rate limits accordingly. Too restrictive limits may impact legitimate users.
+</Tip>
+
+## CORS Configuration
+
+Cross-Origin Resource Sharing (CORS) controls which web applications can access your print server from a browser.
+
+### Understanding CORS
+
+Browsers enforce the same-origin policy, which prevents JavaScript running on one domain from accessing resources on another domain. CORS is a mechanism that allows controlled access across origins.
+
+### Configuring Allowed Origins
+
+Specify which origins are allowed to make requests:
+
+```toml
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:8080",
+    "http://127.0.0.1:3000",
+]
+```
+
+### Wildcard Origin (Development Only)
+
+For development, you can allow all origins:
+
+```toml
+allowed_origins = ["*"]
+```
+
+<Warning>
+  Using `*` in production is a security risk. Always specify exact origins in production environments.
+</Warning>
+
+### Production CORS Configuration
+
+For production, use specific protocols, domains, and ports:
+
+```toml
+allowed_origins = [
+    "https://app.yourcompany.com",
+    "https://admin.yourcompany.com",
+]
+```
+
+**Important notes:**
+- Include the protocol (`http://` or `https://`)
+- Include the port if not using standard ports (80 for HTTP, 443 for HTTPS)
+- Do not include trailing slashes
+- Origins are case-sensitive
+
+### CORS Preflight Requests
+
+For requests with custom headers (like `Authorization`), browsers send a preflight OPTIONS request. Print My Bridge automatically handles these preflight requests for allowed origins.
+
+## Allowed File Types
+
+Restrict which file types can be printed to prevent abuse and ensure compatibility.
+
+### Configuring Allowed File Types
+
+```toml
+allowed_file_types = ["pdf", "html", "text", "image"]
+```
+
+### Supported File Types
+
+<ParamField path="pdf" type="string">
+  PDF documents - the most common format for printing
+</ParamField>
+
+<ParamField path="html" type="string">
+  HTML files - rendered and printed
+</ParamField>
+
+<ParamField path="text" type="string">
+  Plain text files - .txt, .log, etc.
+</ParamField>
+
+<ParamField path="image" type="string">
+  Image files - PNG, JPG, GIF, etc.
+</ParamField>
+
+### Restrictive Configuration Example
+
+For maximum security, only allow PDF files:
+
+```toml
+allowed_file_types = ["pdf"]
+```
+
+## Network Security
+
+### Localhost-Only Binding
+
+By default, Print My Bridge binds to `127.0.0.1` (localhost), making it accessible only from the local machine:
+
+```toml
+host = "127.0.0.1"
+```
+
+<Tip>
+  This is the most secure configuration and is recommended unless you specifically need network access.
+</Tip>
+
+### Network Binding
+
+To accept connections from other machines on the network:
+
+```toml
+host = "0.0.0.0"
+```
+
+<Warning>
+  Network binding exposes your print server to other machines. Ensure you have:
+  - Strong authentication configured (`api_token`)
+  - Strict rate limiting
+  - Firewall rules in place
+  - Specific allowed origins (not `*`)
+</Warning>
+
+## Security Best Practices
+
+<Steps>
+  <Step title="Always Use Authentication">
+    Set a strong `api_token` and never disable authentication in production.
+  </Step>
+  
+  <Step title="Limit File Size">
+    Set reasonable `max_file_size_mb` limits to prevent resource exhaustion:
+    ```toml
+    max_file_size_mb = 25
+    ```
+  </Step>
+  
+  <Step title="Configure Specific Origins">
+    Never use `allowed_origins = ["*"]` in production. Specify exact origins.
+  </Step>
+  
+  <Step title="Enable Rate Limiting">
+    Set appropriate `rate_limit_per_minute` values based on your usage patterns.
+  </Step>
+  
+  <Step title="Restrict File Types">
+    Only allow file types you need:
+    ```toml
+    allowed_file_types = ["pdf"]
+    ```
+  </Step>
+  
+  <Step title="Use Localhost Binding">
+    Keep `host = "127.0.0.1"` unless network access is required.
+  </Step>
+  
+  <Step title="Rotate Tokens Regularly">
+    Generate new tokens periodically and update your applications.
+  </Step>
+  
+  <Step title="Monitor Logs">
+    Regularly check logs for suspicious activity or failed authentication attempts.
+  </Step>
+</Steps>
+
+## Complete Secure Configuration Example
+
+Here's a complete configuration with security best practices:
+
+```toml
+# Network - localhost only
+host = "127.0.0.1"
+port = 8765
+
+# Authentication - required
+api_token = "KmWv0HH0MW2Ex9VrmpSiDkddSUk2141K"
+
+# Rate limiting - moderate
+rate_limit_per_minute = 60
+
+# CORS - specific origins only
+allowed_origins = [
+    "https://app.yourcompany.com",
+    "https://admin.yourcompany.com",
+]
+
+# File restrictions
+max_file_size_mb = 25
+allowed_file_types = ["pdf"]
+
+# Application settings
+auto_start = true
+minimize_to_tray = true
+```
+
+## Troubleshooting Security Issues
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized Error">
+    - Verify the token is correctly set in configuration
+    - Ensure the `Authorization` header is properly formatted: `Bearer <token>`
+    - Check that the token matches exactly (no extra spaces or characters)
+  </Accordion>
+  
+  <Accordion title="429 Rate Limit Exceeded">
+    - Wait for the rate limit window to reset (1 minute)
+    - Increase `rate_limit_per_minute` if needed
+    - Check for unintentional request loops in your code
+  </Accordion>
+  
+  <Accordion title="CORS Error in Browser">
+    - Add your application's origin to `allowed_origins`
+    - Ensure the origin includes protocol and port
+    - Check browser console for the exact origin being blocked
+  </Accordion>
+  
+  <Accordion title="File Type Not Allowed">
+    - Check that the file type is in `allowed_file_types`
+    - Verify the file extension matches one of the allowed types
+    - Review server logs for specific rejection reasons
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Learn how to use the secured API endpoints
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting">
+    Solutions for common security and connection issues
+  </Card>
+</CardGroup>

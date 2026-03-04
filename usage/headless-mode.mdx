@@ -1,0 +1,521 @@
+---
+title: Headless Mode
+description: Run Print My Bridge as a background service without the GUI using headless mode for server deployments and automated environments
+---
+
+Headless mode allows Print My Bridge to run as a pure HTTP service without the graphical interface, making it ideal for server environments, Docker containers, and automated deployments.
+
+## Running with --headless Flag
+
+To start Print My Bridge in headless mode, use the `--headless` command-line flag:
+
+```bash
+./print-my-bridge --headless
+```
+
+In headless mode, the application:
+- Skips GUI initialization completely
+- Starts only the HTTP server
+- Runs in the foreground by default
+- Logs to stdout (in debug mode) or silently (in release mode)
+- Does not create a system tray icon
+- Does not display any windows
+
+Reference: `src-tauri/src/main.rs:26-34`
+
+<Note>
+  The headless check is performed at startup by examining command-line arguments. If `--headless` is detected, the application calls `start_http_server()` instead of `start_gui_app()`.
+</Note>
+
+## Use Cases for Headless Mode
+
+Headless mode is designed for specific deployment scenarios:
+
+### Server Deployments
+
+Run Print My Bridge on a server without a display:
+
+```bash
+# Start in headless mode
+./print-my-bridge --headless
+```
+
+Ideal for:
+- Dedicated print servers
+- Remote printer access
+- Cloud-based printing services
+- Network printer bridges
+
+### Docker Containers
+
+Create a Dockerfile for containerized deployment:
+
+```dockerfile
+FROM ubuntu:22.04
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    cups \
+    libssl3 \
+    ca-certificates
+
+# Copy binary
+COPY print-my-bridge /usr/local/bin/
+
+# Copy configuration
+COPY print-my-bridge.toml /app/
+
+WORKDIR /app
+
+# Expose API port
+EXPOSE 8765
+
+# Run in headless mode
+CMD ["/usr/local/bin/print-my-bridge", "--headless"]
+```
+
+Then run:
+
+```bash
+docker build -t print-my-bridge .
+docker run -d -p 8765:8765 -v /var/run/cups:/var/run/cups print-my-bridge
+```
+
+### Systemd Service (Linux)
+
+Run as a system service that starts automatically:
+
+```systemd
+[Unit]
+Description=Print My Bridge Service
+After=network.target
+
+[Service]
+Type=simple
+User=printbridge
+WorkingDirectory=/opt/print-my-bridge
+ExecStart=/opt/print-my-bridge/print-my-bridge --headless
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Save to `/etc/systemd/system/print-my-bridge.service` and enable:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable print-my-bridge
+sudo systemctl start print-my-bridge
+```
+
+### CI/CD Pipelines
+
+Use in automated testing environments:
+
+```yaml
+# GitHub Actions example
+steps:
+  - name: Start Print Bridge
+    run: |
+      ./print-my-bridge --headless &
+      sleep 2
+      
+  - name: Test API
+    run: |
+      curl http://localhost:8765/health
+```
+
+### Background Process
+
+Run as a background process on any system:
+
+```bash
+# Start in background
+nohup ./print-my-bridge --headless > /var/log/print-my-bridge.log 2>&1 &
+
+# Save PID for later
+echo $! > /var/run/print-my-bridge.pid
+```
+
+## Command Line Arguments
+
+Print My Bridge supports the following command-line arguments:
+
+### Available Arguments
+
+| Argument | Description | Default |
+|----------|-------------|--------|
+| `--headless` | Run without GUI | GUI mode |
+
+<Note>
+  Currently, `--headless` is the only command-line flag. All other configuration is done through the `print-my-bridge.toml` configuration file.
+</Note>
+
+### Future Arguments (Roadmap)
+
+Planned command-line arguments for future versions:
+
+```bash
+# Configuration override
+./print-my-bridge --headless --port 9000 --host 0.0.0.0
+
+# Custom config file
+./print-my-bridge --headless --config /etc/print-my-bridge/config.toml
+
+# Verbose logging
+./print-my-bridge --headless --verbose
+
+# One-shot mode (handle single request and exit)
+./print-my-bridge --headless --once
+```
+
+Reference: `src-tauri/src/main.rs:27-28` for current argument parsing
+
+## Running as a Service
+
+Set up Print My Bridge to run automatically as a system service:
+
+<Tabs>
+  <Tab title="Linux (systemd)">
+    <Steps>
+      <Step title="Create Service File">
+        Create `/etc/systemd/system/print-my-bridge.service`:
+        
+        ```systemd
+        [Unit]
+        Description=Print My Bridge - Secure Printing Service
+        After=network.target cups.service
+        Wants=cups.service
+        
+        [Service]
+        Type=simple
+        User=printbridge
+        Group=printbridge
+        WorkingDirectory=/opt/print-my-bridge
+        ExecStart=/opt/print-my-bridge/print-my-bridge --headless
+        
+        # Restart configuration
+        Restart=on-failure
+        RestartSec=10
+        
+        # Security hardening
+        NoNewPrivileges=true
+        PrivateTmp=true
+        ProtectSystem=strict
+        ProtectHome=true
+        ReadWritePaths=/opt/print-my-bridge
+        
+        # Logging
+        StandardOutput=journal
+        StandardError=journal
+        SyslogIdentifier=print-my-bridge
+        
+        [Install]
+        WantedBy=multi-user.target
+        ```
+      </Step>
+      
+      <Step title="Create User and Setup">
+        ```bash
+        # Create service user
+        sudo useradd -r -s /bin/false printbridge
+        
+        # Create directory and set permissions
+        sudo mkdir -p /opt/print-my-bridge
+        sudo chown printbridge:printbridge /opt/print-my-bridge
+        
+        # Copy binary and config
+        sudo cp print-my-bridge /opt/print-my-bridge/
+        sudo cp print-my-bridge.toml /opt/print-my-bridge/
+        sudo chown printbridge:printbridge /opt/print-my-bridge/*
+        ```
+      </Step>
+      
+      <Step title="Enable and Start Service">
+        ```bash
+        # Reload systemd
+        sudo systemctl daemon-reload
+        
+        # Enable on boot
+        sudo systemctl enable print-my-bridge
+        
+        # Start now
+        sudo systemctl start print-my-bridge
+        
+        # Check status
+        sudo systemctl status print-my-bridge
+        
+        # View logs
+        sudo journalctl -u print-my-bridge -f
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Windows (NSSM)">
+    <Steps>
+      <Step title="Install NSSM">
+        Download NSSM (Non-Sucking Service Manager) from [nssm.cc](https://nssm.cc/download).
+      </Step>
+      
+      <Step title="Install Service">
+        ```cmd
+        nssm install PrintMyBridge "C:\Program Files\Print My Bridge\print-my-bridge.exe"
+        nssm set PrintMyBridge AppParameters --headless
+        nssm set PrintMyBridge AppDirectory "C:\Program Files\Print My Bridge"
+        nssm set PrintMyBridge Description "Print My Bridge - Secure Printing Service"
+        nssm set PrintMyBridge Start SERVICE_AUTO_START
+        ```
+      </Step>
+      
+      <Step title="Start Service">
+        ```cmd
+        nssm start PrintMyBridge
+        nssm status PrintMyBridge
+        ```
+      </Step>
+    </Steps>
+    
+    To remove the service:
+    ```cmd
+    nssm stop PrintMyBridge
+    nssm remove PrintMyBridge confirm
+    ```
+  </Tab>
+  
+  <Tab title="macOS (launchd)">
+    <Steps>
+      <Step title="Create Launch Daemon">
+        Create `/Library/LaunchDaemons/com.printmybridge.service.plist`:
+        
+        ```xml
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>Label</key>
+            <string>com.printmybridge.service</string>
+            <key>ProgramArguments</key>
+            <array>
+                <string>/usr/local/bin/print-my-bridge</string>
+                <string>--headless</string>
+            </array>
+            <key>WorkingDirectory</key>
+            <string>/usr/local/etc/print-my-bridge</string>
+            <key>RunAtLoad</key>
+            <true/>
+            <key>KeepAlive</key>
+            <true/>
+            <key>StandardOutPath</key>
+            <string>/usr/local/var/log/print-my-bridge.log</string>
+            <key>StandardErrorPath</key>
+            <string>/usr/local/var/log/print-my-bridge-error.log</string>
+        </dict>
+        </plist>
+        ```
+      </Step>
+      
+      <Step title="Install and Load">
+        ```bash
+        # Set permissions
+        sudo chown root:wheel /Library/LaunchDaemons/com.printmybridge.service.plist
+        sudo chmod 644 /Library/LaunchDaemons/com.printmybridge.service.plist
+        
+        # Load service
+        sudo launchctl load /Library/LaunchDaemons/com.printmybridge.service.plist
+        
+        # Check status
+        sudo launchctl list | grep printmybridge
+        ```
+      </Step>
+    </Steps>
+    
+    To unload the service:
+    ```bash
+    sudo launchctl unload /Library/LaunchDaemons/com.printmybridge.service.plist
+    ```
+  </Tab>
+</Tabs>
+
+## Logging and Monitoring
+
+### Debug Mode Logging
+
+In debug builds, logging is automatically enabled:
+
+```bash
+# Build in debug mode
+cargo build
+
+# Run with logs
+RUST_LOG=debug ./target/debug/print-my-bridge --headless
+```
+
+Log output includes:
+- 🚀 Server startup messages
+- 📄 Configuration loading
+- ✅ Successful operations
+- ❌ Errors and failures
+- 🔍 Request details (with `warp::log`)
+
+Reference: `src-tauri/src/main.rs:16-24`
+
+### Production Logging
+
+In release builds, logging is disabled by default for performance. To enable:
+
+```bash
+# Build with logging
+cargo build --release --features logging
+
+# Or use environment variable
+RUST_LOG=info ./print-my-bridge --headless
+```
+
+### Log Locations
+
+When running as a service, logs are written to:
+
+**Linux (systemd)**:
+```bash
+# View live logs
+sudo journalctl -u print-my-bridge -f
+
+# View last 100 lines
+sudo journalctl -u print-my-bridge -n 100
+
+# View logs since boot
+sudo journalctl -u print-my-bridge -b
+```
+
+**Windows (NSSM)**:
+- Configured in NSSM: `nssm set PrintMyBridge AppStdout C:\Logs\print-my-bridge.log`
+- Or check Windows Event Viewer
+
+**macOS (launchd)**:
+- stdout: `/usr/local/var/log/print-my-bridge.log`
+- stderr: `/usr/local/var/log/print-my-bridge-error.log`
+
+### Health Monitoring
+
+Monitor the service health using the `/health` endpoint:
+
+```bash
+# Simple check
+curl http://localhost:8765/health
+
+# Continuous monitoring
+watch -n 5 'curl -s http://localhost:8765/health | jq'
+
+# Nagios/Icinga check
+curl -f http://localhost:8765/health || exit 2
+```
+
+**Expected Response**:
+```json
+{
+  "status": "ok",
+  "service": "print-my-bridge",
+  "version": "0.1.0"
+}
+```
+
+### Prometheus Metrics (Future)
+
+Planned metrics endpoint for monitoring:
+
+```bash
+curl http://localhost:8765/metrics
+```
+
+Will expose:
+- Request count and rate
+- Print job success/failure counts
+- Response times
+- Active connections
+- Error rates
+
+## Configuration in Headless Mode
+
+Headless mode uses the same configuration file as GUI mode:
+
+```toml
+# print-my-bridge.toml
+host = "127.0.0.1"
+port = 8765
+max_file_size_mb = 50
+rate_limit_per_minute = 60
+auto_start = false
+minimize_to_tray = false
+allowed_origins = ["*"]
+allowed_file_types = ["pdf", "html", "text", "image"]
+default_printer = ""
+```
+
+<Warning>
+  For server deployments, consider:
+  - Setting `host = "0.0.0.0"` to accept connections from other machines (only in trusted networks)
+  - Restricting `allowed_origins` to specific domains
+  - Increasing `rate_limit_per_minute` for high-traffic scenarios
+  - Always use HTTPS reverse proxy (nginx, caddy) for production
+</Warning>
+
+Reference: `src-tauri/src/config/mod.rs:6-42`
+
+## Troubleshooting Headless Mode
+
+### Service Won't Start
+
+```bash
+# Check if port is in use
+sudo netstat -tlnp | grep 8765
+
+# Check configuration syntax
+toml-validator print-my-bridge.toml
+
+# Run in foreground to see errors
+./print-my-bridge --headless
+```
+
+### Can't Connect to Service
+
+```bash
+# Check if service is running
+sudo systemctl status print-my-bridge  # Linux
+sudo launchctl list | grep printmybridge  # macOS
+nssm status PrintMyBridge  # Windows
+
+# Test local connectivity
+curl http://localhost:8765/health
+
+# Check firewall
+sudo ufw status  # Linux
+```
+
+### High Memory/CPU Usage
+
+```bash
+# Monitor resource usage
+top -p $(pgrep print-my-bridge)
+
+# Check for connection leaks
+ss -tp | grep print-my-bridge
+
+# Review rate limiting
+# Adjust rate_limit_per_minute in config
+```
+
+### Permission Errors
+
+```bash
+# Ensure service user has permissions
+sudo ls -la /opt/print-my-bridge/
+
+# Check CUPS access
+sudo usermod -a -G lp printbridge
+
+# Verify config file permissions
+chmod 600 print-my-bridge.toml
+```

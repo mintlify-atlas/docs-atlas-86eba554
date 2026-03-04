@@ -1,0 +1,251 @@
+---
+title: Configuration Settings
+description: Complete reference for all Print My Bridge configuration options with types, defaults, and examples
+---
+
+This page provides a comprehensive reference for all configuration options available in Print My Bridge. All settings are defined in the `Config` struct (src-tauri/src/config/mod.rs:6-19).
+
+## Server Configuration
+
+Control how the HTTP server listens for incoming connections.
+
+<ParamField path="host" type="string" default="127.0.0.1" required>
+  The IP address the server will bind to. Use `127.0.0.1` for localhost-only access or `0.0.0.0` to accept connections from any network interface.
+  
+  <Warning>
+    Using `0.0.0.0` exposes your print server to the network. Ensure you have proper authentication configured.
+  </Warning>
+  
+  **Example:**
+  ```toml
+  host = "127.0.0.1"
+  ```
+</ParamField>
+
+<ParamField path="port" type="u16" default="8765" required>
+  The TCP port the server will listen on. Must be between 1024 and 65535 for non-privileged users.
+  
+  **Example:**
+  ```toml
+  port = 8765
+  ```
+</ParamField>
+
+## File Upload Settings
+
+Configure file size limits and allowed file types for print jobs.
+
+<ParamField path="max_file_size_mb" type="u64" default="50" required>
+  Maximum file size in megabytes that can be uploaded for printing. Larger files will be rejected with a 413 Payload Too Large error.
+  
+  **Example:**
+  ```toml
+  max_file_size_mb = 50
+  ```
+</ParamField>
+
+<ParamField path="allowed_file_types" type="array[string]" default='["pdf", "html", "text", "image"]' required>
+  List of allowed file types for printing. Supported values:
+  - `pdf` - PDF documents
+  - `html` - HTML files
+  - `text` - Plain text files
+  - `image` - Image files (PNG, JPG, etc.)
+  
+  **Example:**
+  ```toml
+  allowed_file_types = ["pdf", "html", "text", "image"]
+  ```
+</ParamField>
+
+## Security Settings
+
+Configure authentication and rate limiting for API access.
+
+<ParamField path="api_token" type="string | null" default="null">
+  Bearer token required for API authentication. If set, all API endpoints (except `/health`) require this token in the `Authorization` header.
+  
+  <Tip>
+    Generate a secure token using the built-in token generator or via the UI. A secure token should be at least 32 characters long.
+  </Tip>
+  
+  **Example:**
+  ```toml
+  api_token = "KmWv0HH0MW2Ex9VrmpSiDkddSUk2141K"
+  ```
+  
+  **Usage in API requests:**
+  ```bash
+  curl -H "Authorization: Bearer KmWv0HH0MW2Ex9VrmpSiDkddSUk2141K" \
+       http://localhost:8765/api/printers
+  ```
+</ParamField>
+
+<ParamField path="rate_limit_per_minute" type="u32" default="60" required>
+  Maximum number of API requests allowed per minute from a single client. Requests exceeding this limit will receive a 429 Too Many Requests response.
+  
+  **Example:**
+  ```toml
+  rate_limit_per_minute = 60
+  ```
+</ParamField>
+
+<ParamField path="allowed_origins" type="array[string]" default='["*"]' required>
+  List of origins allowed to make cross-origin requests (CORS). Use `*` to allow all origins (not recommended for production).
+  
+  **Example:**
+  ```toml
+  allowed_origins = [
+      "http://localhost:3000",
+      "http://localhost:8080",
+      "http://127.0.0.1:3000",
+  ]
+  ```
+  
+  See [Security Configuration](/configuration/security#cors-configuration) for more details.
+</ParamField>
+
+## Printer Settings
+
+Configure default printer behavior.
+
+<ParamField path="default_printer" type="string | null" default="null">
+  Name of the default printer to use when no printer is specified in the print request. If not set, the system's default printer will be used.
+  
+  **Example:**
+  ```toml
+  default_printer = "HP LaserJet Pro"
+  ```
+</ParamField>
+
+## Application Settings
+
+Control application startup and window behavior.
+
+<ParamField path="auto_start" type="boolean" default="false" required>
+  Whether to automatically start Print My Bridge when the system boots.
+  
+  **Example:**
+  ```toml
+  auto_start = false
+  ```
+</ParamField>
+
+<ParamField path="minimize_to_tray" type="boolean" default="true" required>
+  Whether to minimize the application to the system tray instead of the taskbar when the window is closed.
+  
+  **Example:**
+  ```toml
+  minimize_to_tray = true
+  ```
+</ParamField>
+
+## Complete Example Configuration
+
+Here's a complete example configuration with all available options:
+
+```toml
+# Server configuration
+host = "127.0.0.1"
+port = 8765
+
+# File upload settings
+max_file_size_mb = 50
+allowed_file_types = ["pdf", "html", "text", "image"]
+
+# Security settings
+api_token = "KmWv0HH0MW2Ex9VrmpSiDkddSUk2141K"
+rate_limit_per_minute = 60
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:8080",
+    "http://127.0.0.1:3000",
+]
+
+# Printer settings
+default_printer = "HP LaserJet Pro"
+
+# Application settings
+auto_start = false
+minimize_to_tray = true
+```
+
+## Common Configuration Scenarios
+
+### Development Environment
+
+For local development with permissive settings:
+
+```toml
+host = "127.0.0.1"
+port = 8765
+max_file_size_mb = 100
+rate_limit_per_minute = 120
+allowed_origins = ["*"]
+auto_start = false
+minimize_to_tray = false
+```
+
+### Production Environment
+
+For production with strict security:
+
+```toml
+host = "127.0.0.1"
+port = 8765
+max_file_size_mb = 25
+rate_limit_per_minute = 30
+api_token = "your-secure-token-here"
+allowed_origins = [
+    "https://app.yourcompany.com",
+    "https://admin.yourcompany.com",
+]
+allowed_file_types = ["pdf"]
+auto_start = true
+minimize_to_tray = true
+```
+
+### High-Volume Environment
+
+For environments with many print jobs:
+
+```toml
+host = "127.0.0.1"
+port = 8765
+max_file_size_mb = 100
+rate_limit_per_minute = 300
+api_token = "your-secure-token-here"
+allowed_file_types = ["pdf", "html", "text", "image"]
+auto_start = true
+```
+
+## Configuration Validation
+
+Print My Bridge validates your configuration on startup. Common validation errors include:
+
+<AccordionGroup>
+  <Accordion title="Invalid TOML Syntax">
+    Ensure your TOML file is properly formatted. Common issues:
+    - Missing quotes around strings
+    - Incorrect array syntax
+    - Invalid escape sequences
+  </Accordion>
+  
+  <Accordion title="Port Already in Use">
+    If the specified port is already in use, the application will fail to start. Choose a different port or stop the process using that port.
+  </Accordion>
+  
+  <Accordion title="Invalid File Types">
+    Only the following file types are supported: `pdf`, `html`, `text`, `image`. Other values will be ignored.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security Configuration" icon="shield" href="/configuration/security">
+    Learn about securing your Print My Bridge installation
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore the Print My Bridge API endpoints
+  </Card>
+</CardGroup>

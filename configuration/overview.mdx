@@ -1,0 +1,143 @@
+---
+title: Configuration Overview
+description: Learn how Print My Bridge configuration works, including file locations, formats, and hot reloading behavior
+---
+
+Print My Bridge uses a TOML configuration file to manage all application settings. The configuration system is designed to be simple, flexible, and platform-aware.
+
+## Configuration File Location
+
+The configuration file `print-my-bridge.toml` is stored in platform-specific locations:
+
+<CardGroup cols={3}>
+  <Card title="Windows" icon="windows">
+    `%APPDATA%/print-my-bridge/print-my-bridge.toml`
+  </Card>
+  <Card title="macOS" icon="apple">
+    `~/Library/Application Support/print-my-bridge/print-my-bridge.toml`
+  </Card>
+  <Card title="Linux" icon="linux">
+    `~/.config/print-my-bridge/print-my-bridge.toml`
+  </Card>
+</CardGroup>
+
+## Configuration File Format
+
+Print My Bridge uses the TOML format for its configuration file. TOML is a minimal, easy-to-read configuration file format that's designed to be unambiguous and simple to parse.
+
+### Example Configuration
+
+```toml
+host = "127.0.0.1"
+port = 8765
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:8080",
+    "http://127.0.0.1:3000",
+]
+api_token = "KmWv0HH0MW2Ex9VrmpSiDkddSUk2141K"
+max_file_size_mb = 50
+allowed_file_types = [
+    "pdf",
+    "html",
+    "text",
+    "image",
+]
+rate_limit_per_minute = 60
+auto_start = false
+minimize_to_tray = true
+```
+
+## How Configuration is Loaded
+
+The configuration loading process follows a simple and predictable pattern:
+
+<Steps>
+  <Step title="Check for Existing Configuration">
+    When Print My Bridge starts, it looks for `print-my-bridge.toml` in the platform-specific configuration directory (src-tauri/src/config/mod.rs:44).
+  </Step>
+  
+  <Step title="Load or Create Configuration">
+    - If the file exists, it's parsed and loaded into memory
+    - If the file doesn't exist, a default configuration is created with sensible defaults (src-tauri/src/config/mod.rs:54)
+  </Step>
+  
+  <Step title="Validate Configuration">
+    The configuration is validated to ensure all required fields are present and values are within acceptable ranges. Invalid configurations will result in an error and the application will fail to start.
+  </Step>
+  
+  <Step title="Apply Configuration">
+    Once validated, the configuration is applied to the HTTP server, authentication system, and other components.
+  </Step>
+</Steps>
+
+### Configuration Loading Code Reference
+
+The configuration loading logic is implemented in `src-tauri/src/config/mod.rs:44-59`:
+
+```rust
+pub fn load_config() -> BridgeResult<Config> {
+    let config_path = "print-my-bridge.toml";
+    
+    if Path::new(config_path).exists() {
+        let config_str = fs::read_to_string(config_path)?;
+        let config: Config = toml::from_str(&config_str)
+            .map_err(|e| crate::error::BridgeError::ConfigError(e.to_string()))?;
+        log::info!("📄 Configuración cargada desde {}", config_path);
+        Ok(config)
+    } else {
+        let config = Config::default();
+        save_config(&config)?;
+        log::info!("📄 Configuración por defecto creada en {}", config_path);
+        Ok(config)
+    }
+}
+```
+
+## Default Configuration
+
+If no configuration file exists, Print My Bridge creates one with the following defaults (src-tauri/src/config/mod.rs:21-42):
+
+- **host**: `127.0.0.1` (localhost only)
+- **port**: `8765`
+- **max_file_size_mb**: `50` MB
+- **rate_limit_per_minute**: `60` requests
+- **api_token**: `None` (must be configured)
+- **auto_start**: `false`
+- **minimize_to_tray**: `true`
+- **allowed_origins**: `["*"]` (all origins)
+- **allowed_file_types**: `["pdf", "html", "text", "image"]`
+- **default_printer**: `None` (uses system default)
+
+<Warning>
+The default configuration allows all origins (`*`). For production use, you should configure specific allowed origins for security.
+</Warning>
+
+## Hot Reloading Behavior
+
+Print My Bridge **does not support hot reloading** of configuration changes. To apply configuration changes:
+
+1. Stop the Print My Bridge application
+2. Edit the `print-my-bridge.toml` file
+3. Restart the application
+
+The new configuration will be loaded and validated during startup.
+
+<Tip>
+Always validate your TOML syntax before restarting the application. Invalid TOML will prevent the application from starting.
+</Tip>
+
+## Configuration Persistence
+
+Configuration changes made through the UI are automatically saved to the configuration file using the `save_config` function (src-tauri/src/config/mod.rs:61-66). This ensures that your settings persist across application restarts.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Settings Reference" icon="sliders" href="/configuration/settings">
+    Complete reference of all configuration options
+  </Card>
+  <Card title="Security Configuration" icon="shield" href="/configuration/security">
+    Learn about authentication, rate limiting, and CORS
+  </Card>
+</CardGroup>

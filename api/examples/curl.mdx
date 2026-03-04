@@ -1,0 +1,413 @@
+---
+title: cURL Examples
+description: Complete cURL examples for interacting with the Print My Bridge API
+---
+
+This guide provides practical cURL examples for all Print My Bridge API endpoints. cURL is a command-line tool available on most systems, making it perfect for testing and automation.
+
+## Prerequisites
+
+Before using these examples:
+
+1. Ensure Print My Bridge is running (default: `http://localhost:8765`)
+2. Generate an API token through the application UI
+3. Replace `YOUR_API_TOKEN` with your actual token
+
+## Health Check
+
+Verify the service is running. This endpoint does not require authentication.
+
+```bash
+curl http://localhost:8765/health
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "service": "print-my-bridge",
+  "version": "0.1.0"
+}
+```
+
+## List Available Printers
+
+Get a list of all available printers on the system.
+
+```bash
+curl -X GET \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  http://localhost:8765/api/printers
+```
+
+**Response:**
+```json
+[
+  {
+    "name": "HP LaserJet Pro",
+    "status": "idle",
+    "is_default": true,
+    "supports_color": false,
+    "paper_sizes": ["A4", "Letter", "Legal"]
+  },
+  {
+    "name": "Canon PIXMA",
+    "status": "idle",
+    "is_default": false,
+    "supports_color": true,
+    "paper_sizes": ["A4", "Letter", "4x6"]
+  }
+]
+```
+
+## Print Text Document
+
+Print plain text content directly.
+
+```bash
+curl -X POST \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Hello, World!\nThis is a test print.",
+    "content_type": "text"
+  }' \
+  http://localhost:8765/api/print
+```
+
+**With specific printer and multiple copies:**
+```bash
+curl -X POST \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "printer_name": "HP LaserJet Pro",
+    "content": "Invoice #12345\nTotal: $99.99",
+    "content_type": "text",
+    "copies": 2
+  }' \
+  http://localhost:8765/api/print
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Texto enviado a impresora exitosamente",
+  "job_id": "text_job_123"
+}
+```
+
+## Print PDF Document
+
+Print a PDF file by sending it as base64-encoded content.
+
+```bash
+# First, encode your PDF to base64
+PDF_BASE64=$(base64 -i document.pdf)
+
+# Then send the print request
+curl -X POST \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"content\": \"$PDF_BASE64\",
+    \"content_type\": \"pdf\"
+  }" \
+  http://localhost:8765/api/print
+```
+
+**With printer selection and multiple copies:**
+```bash
+PDF_BASE64=$(base64 -i invoice.pdf)
+
+curl -X POST \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"printer_name\": \"HP LaserJet Pro\",
+    \"content\": \"$PDF_BASE64\",
+    \"content_type\": \"pdf\",
+    \"copies\": 3
+  }" \
+  http://localhost:8765/api/print
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "PDF enviado a impresora exitosamente",
+  "job_id": "printer-123-456"
+}
+```
+
+## Print HTML Content
+
+Print HTML content (converted to PDF internally).
+
+```bash
+curl -X POST \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "<html><body><h1>Receipt</h1><p>Thank you for your purchase!</p></body></html>",
+    "content_type": "html"
+  }' \
+  http://localhost:8765/api/print
+```
+
+**Advanced HTML with styling:**
+```bash
+curl -X POST \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "<!DOCTYPE html><html><head><style>body { font-family: Arial; } h1 { color: #333; }</style></head><body><h1>Invoice</h1><table><tr><td>Item</td><td>$50</td></tr></table></body></html>",
+    "content_type": "html",
+    "printer_name": "Canon PIXMA"
+  }' \
+  http://localhost:8765/api/print
+```
+
+## Print Image
+
+Print an image file (PNG, JPG, etc.) as base64-encoded content.
+
+```bash
+# Encode image to base64
+IMAGE_BASE64=$(base64 -i photo.png)
+
+# Send print request
+curl -X POST \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"content\": \"$IMAGE_BASE64\",
+    \"content_type\": \"image\"
+  }" \
+  http://localhost:8765/api/print
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Imagen enviada a impresora exitosamente",
+  "job_id": "image_job_123"
+}
+```
+
+## Print with Advanced Options
+
+Use the optional `options` field to specify print settings.
+
+```bash
+PDF_BASE64=$(base64 -i document.pdf)
+
+curl -X POST \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"printer_name\": \"HP LaserJet Pro\",
+    \"content\": \"$PDF_BASE64\",
+    \"content_type\": \"pdf\",
+    \"copies\": 2,
+    \"options\": {
+      \"paper_size\": \"A4\",
+      \"orientation\": \"portrait\",
+      \"color\": false,
+      \"duplex\": true
+    }
+  }" \
+  http://localhost:8765/api/print
+```
+
+## Error Handling
+
+### Unauthorized (401)
+
+Missing or invalid API token:
+
+```bash
+curl -X GET \
+  http://localhost:8765/api/printers
+```
+
+**Response:**
+```json
+{
+  "error": "No autorizado"
+}
+```
+
+### Rate Limit Exceeded (429)
+
+Too many requests in a short time:
+
+```bash
+# Making too many requests
+for i in {1..100}; do
+  curl -X GET \
+    -H "x-api-token: YOUR_API_TOKEN" \
+    http://localhost:8765/api/printers
+done
+```
+
+**Response:**
+```json
+{
+  "error": "Límite de velocidad excedido"
+}
+```
+
+### Unsupported Format (400)
+
+Invalid content type:
+
+```bash
+curl -X POST \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "test",
+    "content_type": "unsupported"
+  }' \
+  http://localhost:8765/api/print
+```
+
+**Response:**
+```json
+{
+  "error": "Formato no soportado: unsupported"
+}
+```
+
+### File Too Large (413)
+
+File exceeds maximum size:
+
+```bash
+# Trying to print a file larger than max_file_size_mb
+LARGE_FILE=$(base64 -i large_document.pdf)
+
+curl -X POST \
+  -H "x-api-token: YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"content\": \"$LARGE_FILE\",
+    \"content_type\": \"pdf\"
+  }" \
+  http://localhost:8765/api/print
+```
+
+**Response:**
+```json
+{
+  "error": "Archivo demasiado grande"
+}
+```
+
+## Complete Shell Script Example
+
+Here's a complete shell script for printing documents:
+
+```bash
+#!/bin/bash
+
+# Configuration
+API_TOKEN="your_api_token_here"
+BASE_URL="http://localhost:8765"
+
+# Function to check health
+check_health() {
+  echo "Checking service health..."
+  curl -s "$BASE_URL/health" | jq
+}
+
+# Function to list printers
+list_printers() {
+  echo "Fetching available printers..."
+  curl -s -H "x-api-token: $API_TOKEN" \
+    "$BASE_URL/api/printers" | jq
+}
+
+# Function to print PDF
+print_pdf() {
+  local file=$1
+  local printer=$2
+  local copies=${3:-1}
+  
+  if [ ! -f "$file" ]; then
+    echo "Error: File not found: $file"
+    return 1
+  fi
+  
+  echo "Encoding $file..."
+  local base64_content=$(base64 -i "$file")
+  
+  echo "Sending to printer: $printer (copies: $copies)..."
+  curl -s -X POST \
+    -H "x-api-token: $API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"printer_name\": \"$printer\",
+      \"content\": \"$base64_content\",
+      \"content_type\": \"pdf\",
+      \"copies\": $copies
+    }" \
+    "$BASE_URL/api/print" | jq
+}
+
+# Function to print text
+print_text() {
+  local text=$1
+  local printer=$2
+  
+  echo "Printing text to $printer..."
+  curl -s -X POST \
+    -H "x-api-token: $API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"printer_name\": \"$printer\",
+      \"content\": \"$text\",
+      \"content_type\": \"text\"
+    }" \
+    "$BASE_URL/api/print" | jq
+}
+
+# Main script
+case "$1" in
+  health)
+    check_health
+    ;;
+  printers)
+    list_printers
+    ;;
+  print-pdf)
+    print_pdf "$2" "$3" "$4"
+    ;;
+  print-text)
+    print_text "$2" "$3"
+    ;;
+  *)
+    echo "Usage: $0 {health|printers|print-pdf <file> <printer> [copies]|print-text <text> <printer>}"
+    exit 1
+    ;;
+esac
+```
+
+**Usage:**
+```bash
+# Check health
+./print-bridge.sh health
+
+# List printers
+./print-bridge.sh printers
+
+# Print PDF
+./print-bridge.sh print-pdf invoice.pdf "HP LaserJet Pro" 2
+
+# Print text
+./print-bridge.sh print-text "Test message" "HP LaserJet Pro"
+```

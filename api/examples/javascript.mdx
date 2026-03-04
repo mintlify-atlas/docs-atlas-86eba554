@@ -1,0 +1,780 @@
+---
+title: JavaScript Examples
+description: Complete JavaScript and Node.js examples for the Print My Bridge API
+---
+
+This guide provides comprehensive JavaScript examples for integrating Print My Bridge into your web applications or Node.js services.
+
+## Prerequisites
+
+Before using these examples:
+
+1. Ensure Print My Bridge is running (default: `http://localhost:8765`)
+2. Generate an API token through the application UI
+3. Install required dependencies (if using Node.js)
+
+## Setup and Configuration
+
+### Browser (Fetch API)
+
+No installation required - use the native Fetch API:
+
+```javascript
+const PRINT_BRIDGE_CONFIG = {
+  baseURL: 'http://localhost:8765',
+  apiToken: 'your_api_token_here'
+};
+```
+
+### Node.js (Native Fetch - Node 18+)
+
+```javascript
+// No installation needed for Node.js 18+
+const PRINT_BRIDGE_CONFIG = {
+  baseURL: 'http://localhost:8765',
+  apiToken: process.env.PRINT_BRIDGE_TOKEN || 'your_api_token_here'
+};
+```
+
+### Node.js (Axios)
+
+```bash
+npm install axios
+```
+
+```javascript
+const axios = require('axios');
+
+const printBridge = axios.create({
+  baseURL: 'http://localhost:8765',
+  headers: {
+    'x-api-token': process.env.PRINT_BRIDGE_TOKEN
+  }
+});
+```
+
+## Helper Class
+
+Create a reusable client class for all API operations:
+
+```javascript
+class PrintBridgeClient {
+  constructor(baseURL, apiToken) {
+    this.baseURL = baseURL;
+    this.apiToken = apiToken;
+  }
+
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers
+    };
+
+    // Add auth header for protected endpoints
+    if (endpoint !== '/health') {
+      headers['x-api-token'] = this.apiToken;
+    }
+
+    const config = {
+      ...options,
+      headers
+    };
+
+    try {
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({
+          error: `HTTP ${response.status}: ${response.statusText}`
+        }));
+        throw new Error(error.error || 'Request failed');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`Print Bridge API Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async checkHealth() {
+    return this.request('/health');
+  }
+
+  async getPrinters() {
+    return this.request('/api/printers');
+  }
+
+  async print(options) {
+    return this.request('/api/print', {
+      method: 'POST',
+      body: JSON.stringify(options)
+    });
+  }
+
+  // Helper to convert file to base64
+  async fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Helper for Node.js to read file
+  async fileToBase64Node(filePath) {
+    const fs = require('fs').promises;
+    const buffer = await fs.readFile(filePath);
+    return buffer.toString('base64');
+  }
+}
+
+// Initialize client
+const client = new PrintBridgeClient(
+  'http://localhost:8765',
+  'your_api_token_here'
+);
+```
+
+## Basic Examples
+
+### Check Service Health
+
+<Tabs>
+  <Tab title="Fetch API">
+    ```javascript
+    async function checkHealth() {
+      try {
+        const response = await fetch('http://localhost:8765/health');
+        const data = await response.json();
+        console.log('Service status:', data);
+        // { status: 'ok', service: 'print-my-bridge', version: '0.1.0' }
+      } catch (error) {
+        console.error('Health check failed:', error);
+      }
+    }
+
+    checkHealth();
+    ```
+  </Tab>
+  <Tab title="Using Client Class">
+    ```javascript
+    async function checkHealth() {
+      try {
+        const health = await client.checkHealth();
+        console.log('Service status:', health);
+      } catch (error) {
+        console.error('Health check failed:', error);
+      }
+    }
+
+    checkHealth();
+    ```
+  </Tab>
+  <Tab title="Axios">
+    ```javascript
+    async function checkHealth() {
+      try {
+        const { data } = await axios.get('http://localhost:8765/health');
+        console.log('Service status:', data);
+      } catch (error) {
+        console.error('Health check failed:', error.message);
+      }
+    }
+
+    checkHealth();
+    ```
+  </Tab>
+</Tabs>
+
+### List Available Printers
+
+<Tabs>
+  <Tab title="Fetch API">
+    ```javascript
+    async function listPrinters() {
+      try {
+        const response = await fetch('http://localhost:8765/api/printers', {
+          headers: {
+            'x-api-token': 'your_api_token_here'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const printers = await response.json();
+        console.log('Available printers:', printers);
+        
+        // Find default printer
+        const defaultPrinter = printers.find(p => p.is_default);
+        console.log('Default printer:', defaultPrinter?.name);
+        
+        return printers;
+      } catch (error) {
+        console.error('Failed to list printers:', error);
+        throw error;
+      }
+    }
+
+    listPrinters();
+    ```
+  </Tab>
+  <Tab title="Using Client Class">
+    ```javascript
+    async function listPrinters() {
+      try {
+        const printers = await client.getPrinters();
+        console.log('Available printers:', printers);
+        
+        // Find default printer
+        const defaultPrinter = printers.find(p => p.is_default);
+        console.log('Default printer:', defaultPrinter?.name);
+        
+        // Find color printers
+        const colorPrinters = printers.filter(p => p.supports_color);
+        console.log('Color printers:', colorPrinters.map(p => p.name));
+        
+        return printers;
+      } catch (error) {
+        console.error('Failed to list printers:', error);
+        throw error;
+      }
+    }
+
+    listPrinters();
+    ```
+  </Tab>
+</Tabs>
+
+### Print Text Document
+
+<Tabs>
+  <Tab title="Simple Text">
+    ```javascript
+    async function printText(text, printerName = null) {
+      try {
+        const response = await fetch('http://localhost:8765/api/print', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-token': 'your_api_token_here'
+          },
+          body: JSON.stringify({
+            content: text,
+            content_type: 'text',
+            printer_name: printerName,
+            copies: 1
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Print failed');
+        }
+
+        const result = await response.json();
+        console.log('Print result:', result);
+        return result;
+      } catch (error) {
+        console.error('Print failed:', error);
+        throw error;
+      }
+    }
+
+    // Print to default printer
+    printText('Hello, World!\nThis is a test print.');
+
+    // Print to specific printer
+    printText('Invoice #12345\nTotal: $99.99', 'HP LaserJet Pro');
+    ```
+  </Tab>
+  <Tab title="Using Client Class">
+    ```javascript
+    async function printText(text, printerName = null, copies = 1) {
+      try {
+        const result = await client.print({
+          content: text,
+          content_type: 'text',
+          printer_name: printerName,
+          copies: copies
+        });
+
+        console.log('Print successful:', result.message);
+        console.log('Job ID:', result.job_id);
+        return result;
+      } catch (error) {
+        console.error('Print failed:', error.message);
+        throw error;
+      }
+    }
+
+    // Examples
+    await printText('Receipt\nItem 1: $10\nItem 2: $20\nTotal: $30');
+    await printText('Label text', 'Canon PIXMA', 3);
+    ```
+  </Tab>
+</Tabs>
+
+### Print PDF Document
+
+<Tabs>
+  <Tab title="Browser (File Input)">
+    ```javascript
+    // HTML: <input type="file" id="pdfFile" accept=".pdf" />
+    
+    document.getElementById('pdfFile').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      try {
+        // Convert file to base64
+        const base64Content = await client.fileToBase64(file);
+
+        // Print the PDF
+        const result = await client.print({
+          content: base64Content,
+          content_type: 'pdf',
+          printer_name: 'HP LaserJet Pro',
+          copies: 1
+        });
+
+        console.log('PDF printed successfully:', result);
+        alert(`Print job submitted: ${result.job_id}`);
+      } catch (error) {
+        console.error('Failed to print PDF:', error);
+        alert(`Print failed: ${error.message}`);
+      }
+    });
+    ```
+  </Tab>
+  <Tab title="Node.js">
+    ```javascript
+    const fs = require('fs').promises;
+
+    async function printPDF(filePath, printerName = null, copies = 1) {
+      try {
+        // Read file and convert to base64
+        const buffer = await fs.readFile(filePath);
+        const base64Content = buffer.toString('base64');
+
+        // Print the PDF
+        const result = await client.print({
+          content: base64Content,
+          content_type: 'pdf',
+          printer_name: printerName,
+          copies: copies
+        });
+
+        console.log('PDF printed successfully');
+        console.log('Job ID:', result.job_id);
+        return result;
+      } catch (error) {
+        console.error('Failed to print PDF:', error.message);
+        throw error;
+      }
+    }
+
+    // Usage
+    await printPDF('./invoice.pdf', 'HP LaserJet Pro', 2);
+    await printPDF('./document.pdf'); // Use default printer
+    ```
+  </Tab>
+</Tabs>
+
+### Print HTML Content
+
+<Tabs>
+  <Tab title="Simple HTML">
+    ```javascript
+    async function printHTML(htmlContent, printerName = null) {
+      try {
+        const result = await client.print({
+          content: htmlContent,
+          content_type: 'html',
+          printer_name: printerName
+        });
+
+        console.log('HTML printed successfully:', result);
+        return result;
+      } catch (error) {
+        console.error('Failed to print HTML:', error.message);
+        throw error;
+      }
+    }
+
+    // Simple receipt
+    const receiptHTML = `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; }
+            h1 { color: #333; }
+            table { width: 100%; border-collapse: collapse; }
+            td { padding: 8px; border-bottom: 1px solid #ddd; }
+          </style>
+        </head>
+        <body>
+          <h1>Receipt</h1>
+          <p>Date: ${new Date().toLocaleDateString()}</p>
+          <table>
+            <tr><td>Item 1</td><td>$10.00</td></tr>
+            <tr><td>Item 2</td><td>$20.00</td></tr>
+            <tr><td><strong>Total</strong></td><td><strong>$30.00</strong></td></tr>
+          </table>
+        </body>
+      </html>
+    `;
+
+    await printHTML(receiptHTML);
+    ```
+  </Tab>
+  <Tab title="Dynamic Invoice">
+    ```javascript
+    function generateInvoiceHTML(invoiceData) {
+      const { invoiceNumber, date, customer, items, total } = invoiceData;
+      
+      return `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              body { font-family: 'Helvetica', sans-serif; padding: 20px; }
+              .header { text-align: center; margin-bottom: 30px; }
+              .info { margin-bottom: 20px; }
+              table { width: 100%; border-collapse: collapse; }
+              th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+              .total { font-size: 1.2em; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>INVOICE</h1>
+              <p>Invoice #${invoiceNumber}</p>
+            </div>
+            <div class="info">
+              <p><strong>Date:</strong> ${date}</p>
+              <p><strong>Customer:</strong> ${customer}</p>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Quantity</th>
+                  <th>Price</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map(item => `
+                  <tr>
+                    <td>${item.description}</td>
+                    <td>${item.quantity}</td>
+                    <td>$${item.price.toFixed(2)}</td>
+                    <td>$${(item.quantity * item.price).toFixed(2)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <p class="total">Total: $${total.toFixed(2)}</p>
+          </body>
+        </html>
+      `;
+    }
+
+    async function printInvoice(invoiceData, printerName = null) {
+      const html = generateInvoiceHTML(invoiceData);
+      return await printHTML(html, printerName);
+    }
+
+    // Usage
+    const invoice = {
+      invoiceNumber: 'INV-2024-001',
+      date: new Date().toLocaleDateString(),
+      customer: 'Acme Corp',
+      items: [
+        { description: 'Product A', quantity: 2, price: 25.00 },
+        { description: 'Product B', quantity: 1, price: 50.00 }
+      ],
+      total: 100.00
+    };
+
+    await printInvoice(invoice, 'HP LaserJet Pro');
+    ```
+  </Tab>
+</Tabs>
+
+### Print Image
+
+<Tabs>
+  <Tab title="Browser">
+    ```javascript
+    // HTML: <input type="file" id="imageFile" accept="image/*" />
+    
+    document.getElementById('imageFile').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      try {
+        const base64Content = await client.fileToBase64(file);
+
+        const result = await client.print({
+          content: base64Content,
+          content_type: 'image',
+          printer_name: 'Canon PIXMA'
+        });
+
+        console.log('Image printed successfully:', result);
+      } catch (error) {
+        console.error('Failed to print image:', error);
+      }
+    });
+    ```
+  </Tab>
+  <Tab title="Node.js">
+    ```javascript
+    const fs = require('fs').promises;
+
+    async function printImage(imagePath, printerName = null) {
+      try {
+        const buffer = await fs.readFile(imagePath);
+        const base64Content = buffer.toString('base64');
+
+        const result = await client.print({
+          content: base64Content,
+          content_type: 'image',
+          printer_name: printerName
+        });
+
+        console.log('Image printed successfully:', result);
+        return result;
+      } catch (error) {
+        console.error('Failed to print image:', error.message);
+        throw error;
+      }
+    }
+
+    await printImage('./photo.png', 'Canon PIXMA');
+    ```
+  </Tab>
+</Tabs>
+
+## Advanced Examples
+
+### Print with Options
+
+```javascript
+async function printWithOptions(content, contentType, options = {}) {
+  try {
+    const result = await client.print({
+      content: content,
+      content_type: contentType,
+      printer_name: options.printer,
+      copies: options.copies || 1,
+      options: {
+        paper_size: options.paperSize || 'A4',
+        orientation: options.orientation || 'portrait',
+        color: options.color !== false,
+        duplex: options.duplex || false
+      }
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Print with options failed:', error.message);
+    throw error;
+  }
+}
+
+// Usage
+const fs = require('fs').promises;
+const buffer = await fs.readFile('document.pdf');
+const base64Content = buffer.toString('base64');
+
+await printWithOptions(base64Content, 'pdf', {
+  printer: 'HP LaserJet Pro',
+  copies: 2,
+  paperSize: 'Letter',
+  orientation: 'landscape',
+  color: false,
+  duplex: true
+});
+```
+
+### Error Handling
+
+```javascript
+async function safePrint(content, contentType, printerName = null) {
+  try {
+    const result = await client.print({
+      content: content,
+      content_type: contentType,
+      printer_name: printerName
+    });
+    
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Print error:', error.message);
+    
+    // Handle specific errors
+    if (error.message.includes('No autorizado')) {
+      return { success: false, error: 'UNAUTHORIZED', message: 'Invalid API token' };
+    } else if (error.message.includes('Límite de velocidad excedido')) {
+      return { success: false, error: 'RATE_LIMIT', message: 'Too many requests. Please try again later.' };
+    } else if (error.message.includes('Formato no soportado')) {
+      return { success: false, error: 'UNSUPPORTED_FORMAT', message: 'File format not supported' };
+    } else if (error.message.includes('Archivo demasiado grande')) {
+      return { success: false, error: 'FILE_TOO_LARGE', message: 'File exceeds maximum size limit' };
+    } else {
+      return { success: false, error: 'UNKNOWN', message: error.message };
+    }
+  }
+}
+
+// Usage
+const result = await safePrint('Test document', 'text', 'HP LaserJet Pro');
+if (result.success) {
+  console.log('Printed successfully:', result.data.job_id);
+} else {
+  console.error(`Print failed (${result.error}): ${result.message}`);
+}
+```
+
+### Complete React Component Example
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import { PrintBridgeClient } from './PrintBridgeClient';
+
+const PrintComponent = () => {
+  const [client] = useState(() => new PrintBridgeClient(
+    'http://localhost:8765',
+    process.env.REACT_APP_PRINT_BRIDGE_TOKEN
+  ));
+  
+  const [printers, setPrinters] = useState([]);
+  const [selectedPrinter, setSelectedPrinter] = useState('');
+  const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadPrinters();
+  }, []);
+
+  const loadPrinters = async () => {
+    try {
+      const printerList = await client.getPrinters();
+      setPrinters(printerList);
+      
+      // Select default printer
+      const defaultPrinter = printerList.find(p => p.is_default);
+      if (defaultPrinter) {
+        setSelectedPrinter(defaultPrinter.name);
+      }
+    } catch (error) {
+      setStatus(`Failed to load printers: ${error.message}`);
+    }
+  };
+
+  const handlePrintFile = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    setStatus('Printing...');
+
+    try {
+      const base64Content = await client.fileToBase64(file);
+      const fileType = file.name.endsWith('.pdf') ? 'pdf' : 'image';
+
+      const result = await client.print({
+        content: base64Content,
+        content_type: fileType,
+        printer_name: selectedPrinter
+      });
+
+      setStatus(`Print successful! Job ID: ${result.job_id}`);
+    } catch (error) {
+      setStatus(`Print failed: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrintText = async () => {
+    const text = prompt('Enter text to print:');
+    if (!text) return;
+
+    setLoading(true);
+    setStatus('Printing...');
+
+    try {
+      const result = await client.print({
+        content: text,
+        content_type: 'text',
+        printer_name: selectedPrinter
+      });
+
+      setStatus(`Print successful! Job ID: ${result.job_id}`);
+    } catch (error) {
+      setStatus(`Print failed: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Print My Bridge</h2>
+      
+      <div>
+        <label>Select Printer:</label>
+        <select 
+          value={selectedPrinter} 
+          onChange={(e) => setSelectedPrinter(e.target.value)}
+        >
+          {printers.map(printer => (
+            <option key={printer.name} value={printer.name}>
+              {printer.name} {printer.is_default ? '(Default)' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <input 
+          type="file" 
+          accept=".pdf,image/*" 
+          onChange={handlePrintFile}
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <button onClick={handlePrintText} disabled={loading}>
+          Print Text
+        </button>
+      </div>
+
+      {status && <p>{status}</p>}
+    </div>
+  );
+};
+
+export default PrintComponent;
+```
+
+## Best Practices
+
+1. **Environment Variables**: Store API tokens in environment variables
+2. **Error Handling**: Always wrap API calls in try-catch blocks
+3. **Rate Limiting**: Implement client-side rate limiting for bulk operations
+4. **File Size**: Check file size before encoding to base64
+5. **Timeouts**: Set appropriate timeouts for print operations
+6. **Validation**: Validate content type and printer name before printing

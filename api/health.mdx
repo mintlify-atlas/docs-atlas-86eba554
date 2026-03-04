@@ -1,0 +1,113 @@
+---
+title: Health Check
+description: Check the status and availability of the Print My Bridge service
+---
+
+## Overview
+
+The health endpoint provides a simple way to verify that the Print My Bridge service is running and responsive. This endpoint does not require authentication and can be used for monitoring and health checks.
+
+## Endpoint
+
+```http
+GET /health
+```
+
+## Authentication
+
+No authentication required. This is a public endpoint.
+
+## Response
+
+Returns a JSON object with the service status, name, and version.
+
+<ResponseField name="status" type="string" required>
+  The operational status of the service. Always returns `"ok"` when the service is running.
+</ResponseField>
+
+<ResponseField name="service" type="string" required>
+  The name of the service. Always returns `"print-my-bridge"`.
+</ResponseField>
+
+<ResponseField name="version" type="string" required>
+  The current version of the Print My Bridge service.
+</ResponseField>
+
+## Example Request
+
+```bash
+curl http://localhost:8765/health
+```
+
+## Example Response
+
+```json
+{
+  "status": "ok",
+  "service": "print-my-bridge",
+  "version": "0.1.0"
+}
+```
+
+## Use Cases
+
+### Monitoring
+
+Use this endpoint to monitor the availability of your Print My Bridge service:
+
+```bash
+#!/bin/bash
+if curl -f http://localhost:8765/health > /dev/null 2>&1; then
+  echo "Service is healthy"
+else
+  echo "Service is down"
+  # Send alert or restart service
+fi
+```
+
+### Load Balancer Health Checks
+
+Configure your load balancer to use the `/health` endpoint for health checks:
+
+```yaml
+healthCheck:
+  path: /health
+  interval: 30s
+  timeout: 5s
+  healthyThreshold: 2
+  unhealthyThreshold: 3
+```
+
+### Application Startup
+
+Verify that the service is ready before sending print jobs:
+
+```javascript
+async function waitForService() {
+  const maxAttempts = 10;
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const response = await fetch('http://localhost:8765/health');
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Service ready: ${data.service} v${data.version}`);
+        return true;
+      }
+    } catch (error) {
+      console.log(`Attempt ${i + 1}: Service not ready, retrying...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  throw new Error('Service failed to start');
+}
+```
+
+## Error Responses
+
+If the service is not running or unreachable, you will receive a connection error rather than an HTTP response:
+
+```bash
+curl: (7) Failed to connect to localhost port 8765: Connection refused
+```
+
+This indicates that the Print My Bridge service is not running or is bound to a different port.

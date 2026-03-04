@@ -1,97 +1,174 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: Print My Bridge Documentation
+description: Secure remote printing bridge for connecting web applications to local printers
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#1e40af] via-[#2563eb] to-[#60a5fa] dark:from-[#0f1117] dark:via-[#1a1d27] dark:to-[#1e40af] py-20">
+  <div className="max-w-6xl mx-auto px-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+          Print My Bridge
+        </h1>
+        <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-2xl">
+          A secure desktop application that creates an HTTP bridge for remote printing. Send print jobs to local printers from any web application with a simple REST API.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-6 py-3 rounded-lg bg-white text-[#2563eb] font-semibold hover:bg-white/90 transition-colors"
+          >
+            Get Started
+          </a>
+          <a 
+            href="/api/introduction" 
+            className="inline-flex items-center px-6 py-3 rounded-lg border border-white/30 bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors"
+          >
+            API Reference
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:flex justify-center">
+        <div className="relative w-64 h-64 flex items-center justify-center">
+          <div className="absolute inset-0 bg-white/10 rounded-full blur-3xl"></div>
+          <svg className="relative w-48 h-48 text-white/90" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-3">
+    Quick start
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get Print My Bridge running in minutes
+  </p>
+  
+  <Steps>
+    <Step title="Download and install">
+      Download the latest release for your platform from [GitHub](https://github.com/NaturalDevCR/print-my-bridge/releases):
+      
+      - **Windows**: `.msi` installer
+      - **macOS**: Universal `.app` bundle
+      - **Linux**: `.deb` package
+      
+      Run the installer and launch the application.
+    </Step>
+    
+    <Step title="Generate an API token">
+      Open the Print My Bridge application and click **Generate Token** in the settings panel. Copy the generated token — you'll need it to authenticate API requests.
+      
+      ```bash
+      # Example token (yours will be different)
+      KmWv0HH0MW2Ex9VrmpSiDkddSUk2141K
+      ```
+    </Step>
+    
+    <Step title="Send your first print job">
+      Use the API to send a test print job to your default printer:
+      
+      ```bash cURL
+      curl -X POST http://localhost:8765/api/print \
+        -H "x-api-token: YOUR_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "content": "SGVsbG8sIFByaW50IE15IEJyaWRnZSE=",
+          "content_type": "text",
+          "copies": 1
+        }'
+      ```
+      
+      <Accordion title="Response">
+      ```json
+      {
+        "success": true,
+        "message": "Texto enviado a impresora exitosamente",
+        "job_id": "text_job_123"
+      }
+      ```
+      </Accordion>
+    </Step>
+  </Steps>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-3">
+    Key features
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Everything you need for secure remote printing
+  </p>
+  
+  <CardGroup cols={2}>
+    <Card title="Remote printing" icon="print" href="/api/print">
+      Send print jobs to local printers via HTTP API from any web application or remote service.
+    </Card>
+    <Card title="Secure authentication" icon="shield-halved" href="/api/authentication">
+      Token-based authentication with configurable rate limiting to protect your printing infrastructure.
+    </Card>
+    <Card title="Cross-platform" icon="desktop" href="/installation">
+      Native desktop applications for Windows, macOS, and Linux with system tray integration.
+    </Card>
+    <Card title="Multiple formats" icon="file" href="/api/print">
+      Support for PDF, HTML, plain text, and images with base64 encoding.
+    </Card>
+    <Card title="CORS configuration" icon="globe" href="/configuration/security">
+      Configurable cross-origin resource sharing for web application integration.
+    </Card>
+    <Card title="Headless mode" icon="terminal" href="/usage/headless-mode">
+      Run as a background service without GUI for server deployments.
+    </Card>
+  </CardGroup>
+</div>
 
-## Make it yours
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-3">
+    Explore by topic
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Dive deeper into specific areas
+  </p>
+  
+  <CardGroup cols={3}>
+    <Card title="Configuration" icon="sliders" href="/configuration/overview">
+      Learn how to configure Print My Bridge for your environment.
+    </Card>
+    <Card title="API endpoints" icon="code" href="/api/introduction">
+      Explore the complete REST API reference with examples.
+    </Card>
+    <Card title="Building from source" icon="hammer" href="/advanced/building-from-source">
+      Build and customize Print My Bridge for your specific needs.
+    </Card>
+    <Card title="System tray" icon="window-minimize" href="/usage/system-tray">
+      Use the system tray to manage the bridge application.
+    </Card>
+    <Card title="Troubleshooting" icon="wrench" href="/advanced/troubleshooting">
+      Common issues and solutions for Print My Bridge.
+    </Card>
+    <Card title="Security" icon="lock" href="/configuration/security">
+      Understand security features and best practices.
+    </Card>
+  </CardGroup>
+</div>
 
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27] p-8 sm:p-12">
+    <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-3">
+      Ready to start printing?
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400 mb-6 max-w-2xl">
+      Get Print My Bridge running in your environment and start sending print jobs from your applications.
+    </p>
+    <a 
+      href="/quickstart" 
+      className="inline-flex items-center px-6 py-3 rounded-lg bg-[#2563eb] text-white font-semibold hover:bg-[#1e40af] transition-colors"
+    >
+      Get Started Now
+    </a>
+  </div>
+</div>

@@ -1,0 +1,247 @@
+---
+title: Desktop Application
+description: Learn how to use the Print My Bridge desktop application, including the main interface, settings panel, and token management
+---
+
+The Print My Bridge desktop application provides a user-friendly graphical interface for managing your print bridge service. The app runs in the background and provides easy access to configuration and monitoring.
+
+## Launching the Application
+
+When you start Print My Bridge without any command-line arguments, it launches in GUI mode:
+
+- **Windows**: Double-click the application icon or use the Start Menu
+- **macOS**: Open from Applications folder or Launchpad
+- **Linux**: Launch from your applications menu or run the executable
+
+The application will:
+1. Start the HTTP server in the background on the configured port (default: 8765)
+2. Display the main window with the Overview tab
+3. Create a system tray icon for quick access
+4. Load your existing configuration from `print-my-bridge.toml`
+
+Reference: `src-tauri/src/main.rs:59-92`
+
+## Main Window Interface
+
+The desktop application features a tabbed interface with two main sections:
+
+### Overview Tab
+
+The Overview tab displays real-time status information:
+
+- **Bridge Status**: Shows whether the HTTP server is running and on which port
+  - ✅ Green indicator when active: "Bridge is running on port 8765 (v0.1.0)"
+  - ❌ Red indicator when inactive: "Bridge is not running"
+  - The status updates automatically every 5 seconds
+
+- **API Token Display**: Shows your current authentication token
+  - Read-only field displaying the active token
+  - Initially shows "Loading token..." while configuration loads
+  - Shows "No token available" if no token is configured
+
+- **Token Actions**:
+  - **Copy Token** button: Copies the token to your clipboard for use in API requests
+  - **Generate New Token** button: Creates a new secure 32-character token and saves it to configuration
+
+Reference: `ui/script.js:233-255` for status checking
+
+### Settings Tab
+
+The Settings tab provides access to all configuration options:
+
+<Steps>
+  <Step title="Server Configuration">
+    Configure the HTTP server settings:
+    
+    - **Host**: IP address to bind to (default: `127.0.0.1` for localhost only)
+    - **Port**: Port number for the HTTP server (default: `8765`)
+    - **Max File Size**: Maximum file size in MB for uploads (default: `50`)
+    - **Rate Limit**: Maximum requests per minute (default: `60`)
+  </Step>
+
+  <Step title="Application Settings">
+    Control application behavior:
+    
+    - **Auto Start**: Enable to launch Print My Bridge automatically when you log in
+      - On Windows: Adds registry entry to `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`
+      - On macOS/Linux: Uses auto-launch mechanism
+    - **Minimize to Tray**: When enabled, closing the window minimizes to system tray instead of exiting
+  </Step>
+
+  <Step title="Save Changes">
+    Click the **Save Configuration** button to persist your changes to `print-my-bridge.toml`.
+    
+    <Note>
+      A restart is required for server configuration changes (host, port, rate limits) to take effect.
+    </Note>
+  </Step>
+</Steps>
+
+Reference: `ui/script.js:173-203` for configuration saving
+
+## Token Generation Through UI
+
+The application provides a secure token generation feature:
+
+<Steps>
+  <Step title="Generate New Token">
+    Click the **Generate New Token** button in the Overview tab. The button will show "🔄 Generating..." while processing.
+  </Step>
+
+  <Step title="Token Created">
+    A new secure 32-character alphanumeric token is generated using cryptographically secure random number generation.
+    
+    The token is automatically:
+    - Displayed in the token field
+    - Saved to your configuration file
+    - Ready to use immediately for API authentication
+  </Step>
+
+  <Step title="Copy and Use">
+    Click the **Copy Token** button to copy the token to your clipboard. Use it in your API requests:
+    
+    ```bash
+    curl -H "Authorization: Bearer YOUR_TOKEN" \
+         http://localhost:8765/api/printers
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Generating a new token invalidates the previous token. Update all applications using the old token to prevent authentication failures.
+</Warning>
+
+Reference: `src-tauri/src/gui/mod.rs:117-124` and `src-tauri/src/config/mod.rs:68-81`
+
+## Status Indicators
+
+The application provides several visual indicators to monitor health:
+
+### Bridge Status Colors
+
+- **Green (✅)**: Server is running and responding to health checks
+- **Red (❌)**: Server is not running or not responding
+- **Yellow (⚠️)**: Unable to determine status (network or API error)
+
+The status check performs a health check request to `http://localhost:{port}/health` every 5 seconds.
+
+Reference: `ui/script.js:233-255`
+
+### Notifications
+
+The application displays notifications for important events:
+
+- **Success** (green): Operations completed successfully
+  - "Token copied to clipboard!"
+  - "New token generated successfully!"
+  - "Configuration saved successfully!"
+  - "Auto-start enabled/disabled"
+
+- **Warning** (yellow): Non-critical issues
+  - "No token to copy"
+
+- **Error** (red): Failed operations
+  - "Failed to copy token"
+  - "Failed to generate new token"
+  - "Failed to save configuration"
+
+Notifications appear at the top of the window and automatically dismiss after 3 seconds.
+
+Reference: `ui/script.js:257-271`
+
+## Auto-Start Configuration
+
+Enable auto-start to have Print My Bridge launch automatically when you log in:
+
+<Tabs>
+  <Tab title="Windows">
+    Auto-start is managed through Windows Registry:
+    
+    - Registry Key: `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`
+    - Value Name: `Print My Bridge`
+    - Value Data: Full path to the executable
+    
+    Toggle the **Auto Start** checkbox in Settings to enable or disable.
+    
+    Reference: `src-tauri/src/gui/mod.rs:48-96`
+  </Tab>
+  
+  <Tab title="macOS">
+    Auto-start uses the `AutoLaunchBuilder` to create a launch agent:
+    
+    - Creates a `.plist` file in `~/Library/LaunchAgents/`
+    - Registers the application to start at login
+    
+    Toggle the **Auto Start** checkbox in Settings to enable or disable.
+    
+    Reference: `src-tauri/src/gui/mod.rs:99-114`
+  </Tab>
+  
+  <Tab title="Linux">
+    Auto-start creates a desktop entry:
+    
+    - Location: `~/.config/autostart/`
+    - Uses XDG autostart specification
+    
+    Toggle the **Auto Start** checkbox in Settings to enable or disable.
+    
+    Reference: `src-tauri/src/gui/mod.rs:99-114`
+  </Tab>
+</Tabs>
+
+<Note>
+  The auto-start setting is saved to your configuration file and persists across sessions.
+</Note>
+
+## Configuration File Location
+
+The application stores its configuration in a TOML file:
+
+- **Windows**: `%APPDATA%/print-my-bridge/print-my-bridge.toml`
+- **macOS**: `~/Library/Application Support/print-my-bridge/print-my-bridge.toml`
+- **Linux**: `~/.config/print-my-bridge/print-my-bridge.toml`
+
+You can manually edit this file if needed, but changes made through the UI are recommended.
+
+Reference: `src-tauri/src/config/mod.rs:44-59`
+
+## Troubleshooting
+
+### Application Won't Start
+
+- Check if another instance is already running (look for system tray icon)
+- Verify the configuration file is valid TOML format
+- Check if the configured port is available (not used by another application)
+- Run from terminal to see detailed error messages:
+  ```bash
+  cd src-tauri
+  cargo run
+  ```
+
+### Status Shows Red (Not Running)
+
+- The HTTP server may have failed to start
+- Check if the port is already in use
+- Review logs for error messages
+- Try changing the port in Settings and saving
+
+### Auto-Start Not Working
+
+**Windows**:
+- Run the application as administrator once to set registry entry
+- Check if antivirus is blocking registry modifications
+
+**macOS**:
+- Verify System Preferences > Users & Groups > Login Items
+- Check if the application has proper permissions
+
+**Linux**:
+- Ensure `~/.config/autostart/` directory exists
+- Check desktop entry file permissions
+
+### Token Operations Fail
+
+- Ensure Tauri API is fully loaded (wait a few seconds after launch)
+- Check browser console for JavaScript errors (press F12)
+- Try regenerating the token
+- Verify configuration file has write permissions

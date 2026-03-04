@@ -1,0 +1,348 @@
+---
+title: Authentication
+description: Learn how to authenticate API requests using token-based authentication
+---
+
+# Authentication
+
+Print My Bridge uses token-based authentication to secure API endpoints. All endpoints except `/health` require a valid API token.
+
+## Authentication Method
+
+The API uses a simple yet secure token-based authentication system:
+
+- **Header**: `x-api-token`
+- **Token format**: 32-character alphanumeric string
+- **Validation**: Server-side comparison against configured token
+
+## Token Generation
+
+### Using the Application UI
+
+The recommended way to generate a token is through the Print My Bridge application:
+
+1. Open Print My Bridge
+2. Navigate to Settings
+3. Click "Generate API Token"
+4. Copy and securely store the generated token
+
+### Token Format
+
+Tokens are generated using a cryptographically secure random generator:
+
+```rust
+// Token generation (from src-tauri/src/config/mod.rs:68-81)
+pub fn generate_secure_token() -> String {
+    use rand::Rng;
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+                            abcdefghijklmnopqrstuvwxyz\
+                            0123456789";
+    let mut rng = rand::thread_rng();
+    
+    (0..32)
+        .map(|_| {
+            let idx = rng.gen_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
+}
+```
+
+Example token: `a3K9mP2xQ7nR4vT8wY1zB5cD6fG0hJ2L`
+
+## Including Token in Requests
+
+### HTTP Header
+
+Include the token in the `x-api-token` header:
+
+```bash
+curl -H "x-api-token: a3K9mP2xQ7nR4vT8wY1zB5cD6fG0hJ2L" \
+  http://localhost:8765/api/printers
+```
+
+### JavaScript (Fetch API)
+
+```javascript
+fetch('http://localhost:8765/api/printers', {
+  method: 'GET',
+  headers: {
+    'x-api-token': 'a3K9mP2xQ7nR4vT8wY1zB5cD6fG0hJ2L'
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+### Python (Requests)
+
+```python
+import requests
+
+headers = {
+    'x-api-token': 'a3K9mP2xQ7nR4vT8wY1zB5cD6fG0hJ2L'
+}
+
+response = requests.get(
+    'http://localhost:8765/api/printers',
+    headers=headers
+)
+
+print(response.json())
+```
+
+### Node.js (Axios)
+
+```javascript
+const axios = require('axios');
+
+axios.get('http://localhost:8765/api/printers', {
+  headers: {
+    'x-api-token': 'a3K9mP2xQ7nR4vT8wY1zB5cD6fG0hJ2L'
+  }
+})
+.then(response => console.log(response.data))
+.catch(error => console.error(error));
+```
+
+## Authentication Flow
+
+The authentication process follows these steps:
+
+1. **Client sends request** with `x-api-token` header
+2. **Server extracts token** from the header (optional header)
+3. **Server validates token** against configured `api_token`
+4. **Server checks rate limit** for the client IP
+5. **Server processes request** if authentication succeeds
+
+### Validation Logic
+
+From `src-tauri/src/api/mod.rs:101-136`:
+
+```rust
+async fn validate_auth(
+    token: Option<String>, 
+    ctx: SecurityContext
+) -> Result<SecurityContext, warp::Rejection> {
+    // Rate limiting check
+    let client_ip = "127.0.0.1".to_string();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    
+    {
+        let mut limiter = ctx.rate_limiter.lock().unwrap();
+        let requests = limiter.entry(client_ip).or_insert_with(Vec::new);
+        
+        // Remove old requests (older than 1 minute)
+        requests.retain(|&time| now - time < 60);
+        
+        if requests.len() >= ctx.config.rate_limit_per_minute as usize {
+            return Err(warp::reject::custom(BridgeError::RateLimitExceeded));
+        }
+        
+        requests.push(now);
+    }
+    
+    // Token validation
+    if let Some(required_token) = &ctx.config.api_token {
+        match token {
+            Some(provided_token) if provided_token == *required_token => {
+                Ok(ctx)
+            }
+            _ => {
+                Err(warp::reject::custom(BridgeError::Unauthorized))
+            }
+        }
+    } else {
+        Ok(ctx)
+    }
+}
+```
+
+## Authentication Errors
+
+### Missing Token
+
+If no token is provided when one is required:
+
+**Response**:
+```json
+{
+  "error": "Unauthorized",
+  "message": "Missing or invalid API token"
+}
+```
+
+**HTTP Status**: `401 Unauthorized`
+
+### Invalid Token
+
+If the provided token doesn't match the configured token:
+
+**Response**:
+```json
+{
+  "error": "Unauthorized",
+  "message": "Invalid API token"
+}
+```
+
+**HTTP Status**: `401 Unauthorized`
+
+### Rate Limit Exceeded
+
+If too many requests are made within the rate limit window:
+
+**Response**:
+```json
+{
+  "error": "Rate limit exceeded",
+  "message": "Too many requests. Please try again later."
+}
+```
+
+**HTTP Status**: `429 Too Many Requests`
+
+## Rate Limiting
+
+Rate limiting is enforced **before** token validation:
+
+- **Default**: 60 requests per minute per IP
+- **Window**: Rolling 60-second window
+- **Scope**: Per client IP address
+- **Storage**: In-memory HashMap
+
+### Rate Limit Algorithm
+
+1. Track request timestamps for each IP
+2. Remove timestamps older than 60 seconds
+3. Count remaining timestamps
+4. Reject if count >= limit
+5. Add current timestamp to list
+
+### Configuration
+
+Adjust rate limiting in `print-my-bridge.toml`:
+
+```toml
+# Allow 120 requests per minute
+rate_limit_per_minute = 120
+```
+
+## Token Security Best Practices
+
+### Do's
+
+- **Store tokens securely**: Use environment variables or secure credential storage
+- **Use HTTPS**: When exposing the API beyond localhost
+- **Rotate tokens regularly**: Generate new tokens periodically
+- **Restrict CORS**: Configure specific allowed origins in production
+- **Monitor usage**: Track API usage for suspicious activity
+
+### Don'ts
+
+- **Don't commit tokens**: Never commit tokens to version control
+- **Don't share tokens**: Each client should have its own token
+- **Don't log tokens**: Avoid logging tokens in application logs
+- **Don't expose publicly**: Keep the API on localhost or use VPN/SSH tunnels
+- **Don't use default tokens**: Always generate unique tokens
+
+## Token Storage Examples
+
+### Environment Variables
+
+```bash
+# .env file
+PRINT_BRIDGE_TOKEN=a3K9mP2xQ7nR4vT8wY1zB5cD6fG0hJ2L
+```
+
+```javascript
+// Load from environment
+const token = process.env.PRINT_BRIDGE_TOKEN;
+```
+
+### Configuration File (Secure)
+
+```javascript
+// config.js (add to .gitignore)
+module.exports = {
+  printBridge: {
+    token: 'a3K9mP2xQ7nR4vT8wY1zB5cD6fG0hJ2L',
+    baseUrl: 'http://localhost:8765'
+  }
+};
+```
+
+### Credential Managers
+
+For production applications, use credential managers:
+
+- **AWS Secrets Manager**
+- **Azure Key Vault**
+- **HashiCorp Vault**
+- **Doppler**
+- **1Password Secrets Automation**
+
+## Optional Authentication
+
+Authentication can be disabled by removing the `api_token` configuration:
+
+```toml
+# Configuration without token (not recommended)
+[config]
+host = "127.0.0.1"
+port = 8765
+# api_token is not set
+```
+
+When `api_token` is `None`, the `validate_auth` function allows all requests through (after rate limiting).
+
+**Warning**: Only disable authentication in trusted, isolated environments.
+
+## Testing Authentication
+
+### Valid Token Test
+
+```bash
+curl -i -H "x-api-token: YOUR_VALID_TOKEN" \
+  http://localhost:8765/api/printers
+```
+
+Expected: `200 OK` with printer list
+
+### Invalid Token Test
+
+```bash
+curl -i -H "x-api-token: WRONG_TOKEN" \
+  http://localhost:8765/api/printers
+```
+
+Expected: `401 Unauthorized`
+
+### Missing Token Test
+
+```bash
+curl -i http://localhost:8765/api/printers
+```
+
+Expected: `401 Unauthorized`
+
+### Rate Limit Test
+
+```bash
+# Send 61 requests rapidly
+for i in {1..61}; do
+  curl -H "x-api-token: YOUR_TOKEN" \
+    http://localhost:8765/api/printers
+done
+```
+
+Expected: First 60 succeed, 61st returns `429 Too Many Requests`
+
+## Next Steps
+
+- Explore [API Endpoints](/api/printers) for detailed endpoint documentation
+- Learn about [Print Requests](/api/print) and available options
+- Review the [Print endpoint](/api/print) for comprehensive error responses

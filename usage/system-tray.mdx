@@ -1,0 +1,451 @@
+---
+title: System Tray
+description: Understand the system tray functionality in Print My Bridge, including tray menu options, minimize behavior, and platform-specific features
+---
+
+Print My Bridge integrates with your operating system's system tray (notification area) to provide quick access and background operation. The system tray icon allows the application to run unobtrusively while remaining easily accessible.
+
+## System Tray Functionality
+
+When running in GUI mode, Print My Bridge automatically creates a system tray icon:
+
+- **Windows**: Appears in the system tray (bottom-right, near the clock)
+- **macOS**: Appears in the menu bar (top-right)
+- **Linux**: Appears in the system tray or indicator area (varies by desktop environment)
+
+The tray icon provides:
+- Visual indication that Print My Bridge is running
+- Quick access to window controls
+- Context menu with common actions
+- Click interactions for showing/hiding the main window
+
+Reference: `src-tauri/src/main.rs:112-149`
+
+### Tray Icon Appearance
+
+- **Icon**: Uses the application's default icon
+- **Tooltip**: Displays "Print My Bridge" when hovering over the icon
+- **Badge**: No badge or counter (static icon)
+
+<Note>
+  The tray icon is created during application setup and persists for the lifetime of the application. It is only removed when the application fully exits.
+</Note>
+
+## Tray Icon Menu Options
+
+Right-click (or appropriate click for your platform) on the system tray icon to open the context menu:
+
+### Show
+
+Displays the main application window:
+- Makes the window visible if it was hidden
+- Brings the window to the foreground
+- Sets keyboard focus to the window
+
+```rust
+// Implementation reference
+"show" => {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+```
+
+Reference: `src-tauri/src/main.rs:122-127`
+
+### Hide
+
+Hides the main application window:
+- Makes the window invisible
+- Keeps the application running in the background
+- HTTP server continues to operate normally
+- Tray icon remains visible
+
+```rust
+// Implementation reference
+"hide" => {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+```
+
+Reference: `src-tauri/src/main.rs:128-132`
+
+<Info>
+  Hiding the window does not stop the print bridge service. The HTTP API remains accessible at `http://localhost:8765` (or your configured port).
+</Info>
+
+### Quit
+
+Completely exits the application:
+- Closes all windows
+- Stops the HTTP server
+- Removes the system tray icon
+- Terminates the application process
+
+```rust
+// Implementation reference
+"quit" => {
+    app.exit(0);
+}
+```
+
+Reference: `src-tauri/src/main.rs:119-121`
+
+<Warning>
+  Clicking Quit will stop the print bridge service. Any in-progress print jobs may be interrupted. Active API connections will be terminated immediately.
+</Warning>
+
+## Minimize to Tray Behavior
+
+Print My Bridge can be configured to minimize to the system tray instead of the taskbar:
+
+### Close Button Behavior
+
+When you click the window's close button (X), the application:
+- Does **not** exit the application
+- Hides the main window instead
+- Continues running in the background
+- Remains accessible via the system tray icon
+
+```rust
+// Window event handler
+on_window_event(|window, event| match event {
+    WindowEvent::CloseRequested { api, .. } => {
+        // Prevent close and minimize to tray instead
+        let _ = window.hide();
+        api.prevent_close();
+    }
+    _ => {}
+})
+```
+
+Reference: `src-tauri/src/main.rs:153-160`
+
+### Configuration
+
+The minimize-to-tray behavior is controlled by the `minimize_to_tray` setting:
+
+```toml
+# print-my-bridge.toml
+minimize_to_tray = true  # default
+```
+
+- **When `true`**: Close button minimizes to tray (window hides)
+- **When `false`**: Close button exits the application normally
+
+You can change this setting in the GUI:
+1. Open the application
+2. Go to the **Settings** tab
+3. Toggle the **Minimize to Tray** checkbox
+4. Click **Save Configuration**
+
+Reference: `src-tauri/src/config/mod.rs:14` and `ui/script.js:189`
+
+<Note>
+  Changes to minimize-to-tray behavior take effect immediately and do not require a restart.
+</Note>
+
+## Tray Icon Click Behavior
+
+The tray icon responds to mouse clicks:
+
+### Left Click (Primary Click)
+
+Toggle window visibility:
+- **If window is visible**: Hides the window
+- **If window is hidden**: Shows and focuses the window
+
+This provides quick show/hide functionality without opening the context menu.
+
+```rust
+// Click event handler
+on_tray_icon_event(|tray, event| {
+    if let TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+        let app = tray.app_handle();
+        if let Some(window) = app.get_webview_window("main") {
+            if window.is_visible().unwrap_or(false) {
+                let _ = window.hide();
+            } else {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }
+    }
+})
+```
+
+Reference: `src-tauri/src/main.rs:135-147`
+
+### Right Click (Secondary Click)
+
+Displays the context menu with Show, Hide, and Quit options.
+
+### Middle Click
+
+Not currently handled (no action).
+
+### Double Click
+
+Same behavior as single left click (toggles visibility).
+
+<Tip>
+  Use left-click for quick access to the window. Use right-click when you need to quit the application or explicitly show/hide the window.
+</Tip>
+
+## Platform-Specific Differences
+
+The system tray implementation varies slightly across platforms:
+
+<Tabs>
+  <Tab title="Windows">
+    ### Windows System Tray
+    
+    **Location**: Bottom-right corner of the screen, in the system tray area near the clock.
+    
+    **Behavior**:
+    - Icon appears immediately in the notification area
+    - May be hidden in the overflow area (^) if too many icons are present
+    - Supports both left and right-click interactions
+    - Shows tooltip "Print My Bridge" on hover
+    
+    **Visibility**:
+    - To pin the icon: Drag it from the overflow area to the main tray
+    - Or: Settings > Personalization > Taskbar > Select which icons appear
+    
+    **Native Features**:
+    - Uses Windows Shell NotifyIcon API
+    - Context menu follows Windows 11 design language
+    - Supports Windows notification integration
+    
+    **Platform Reference**: `src-tauri/src/main.rs:112-149`
+  </Tab>
+  
+  <Tab title="macOS">
+    ### macOS Menu Bar
+    
+    **Location**: Top-right corner of the screen, in the menu bar status area.
+    
+    **Behavior**:
+    - Icon appears in the menu bar (status bar)
+    - Always visible (not hidden in overflow by default)
+    - Left-click shows/hides window
+    - Right-click (or Control+Click) shows context menu
+    - Menu bar icon follows system theme (light/dark mode)
+    
+    **Appearance**:
+    - Uses template image for proper dark mode support
+    - Icon automatically inverts colors based on system theme
+    - Standard macOS menu bar height and spacing
+    
+    **Native Features**:
+    - Uses NSStatusBar API
+    - Integrates with macOS menu bar management
+    - Supports Command+Tab application switching when window is visible
+    - Can be hidden using macOS menu bar hiding (Control+Cmd+F in fullscreen)
+    
+    **Dock Behavior**:
+    - Application may appear in the Dock when window is visible
+    - Configure `tauri.conf.json` to control Dock presence:
+      ```json
+      {
+        "tauri": {
+          "bundle": {
+            "macOS": {
+              "activationPolicy": "Accessory"
+            }
+          }
+        }
+      }
+      ```
+    
+    **Platform Reference**: `src-tauri/src/main.rs:112-149`
+  </Tab>
+  
+  <Tab title="Linux">
+    ### Linux System Tray / Indicator
+    
+    **Location**: Varies by desktop environment:
+    - **GNOME**: Top panel (requires extension like AppIndicator)
+    - **KDE Plasma**: Bottom-right system tray
+    - **XFCE**: Top or bottom panel notification area
+    - **Ubuntu Unity**: Top panel indicator area
+    
+    **Behavior**:
+    - Icon placement depends on desktop environment
+    - Some DEs may not show tray icons by default (GNOME 40+)
+    - Left and right-click support varies by DE
+    - Tooltip may not always be visible
+    
+    **Protocol Support**:
+    - Uses StatusNotifierItem (SNI) protocol where supported
+    - Falls back to legacy system tray protocol (X11)
+    - Wayland support depends on compositor
+    
+    **Desktop Environment Notes**:
+    
+    **GNOME**:
+    - Requires AppIndicator extension: `gnome-shell-extension-appindicator`
+    - Install: `sudo apt install gnome-shell-extension-appindicator`
+    - Enable in Extensions app or GNOME Tweaks
+    
+    **KDE Plasma**:
+    - Built-in system tray support
+    - Highly customizable icon placement and size
+    - Right-click menu works as expected
+    
+    **XFCE**:
+    - Add "Notification Area" plugin to panel if missing
+    - Supports both SNI and legacy tray icons
+    
+    **Wayland**:
+    - Support varies by compositor
+    - GNOME Wayland: Requires AppIndicator extension
+    - KDE Wayland: Full support
+    - Sway: Limited support (waybar + tray module)
+    
+    **Troubleshooting**:
+    ```bash
+    # Check if AppIndicator is available
+    gsettings get org.gnome.shell enabled-extensions
+    
+    # Enable AppIndicator (GNOME)
+    gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com
+    
+    # Install system tray support (KDE)
+    sudo apt install plasma-workspace-wayland
+    ```
+    
+    **Platform Reference**: `src-tauri/src/main.rs:112-149`
+  </Tab>
+</Tabs>
+
+## Troubleshooting System Tray
+
+### Tray Icon Not Appearing
+
+<Tabs>
+  <Tab title="Windows">
+    **Check overflow area**:
+    - Click the ^ icon in the system tray to show hidden icons
+    - Drag Print My Bridge icon to the main tray area
+    
+    **Windows Settings**:
+    1. Open Settings > Personalization > Taskbar
+    2. Click "Select which icons appear on the taskbar"
+    3. Enable Print My Bridge
+    
+    **Restart Explorer**:
+    ```powershell
+    taskkill /f /im explorer.exe
+    start explorer.exe
+    ```
+  </Tab>
+  
+  <Tab title="macOS">
+    **Menu bar full**:
+    - macOS may hide menu bar items if too many are present
+    - Close other menu bar apps or use a menu bar management tool
+    - Try resizing the window or using a higher resolution
+    
+    **Reset menu bar**:
+    ```bash
+    killall SystemUIServer
+    ```
+    
+    **Check permissions**:
+    - System Preferences > Security & Privacy > Accessibility
+    - Ensure Print My Bridge has required permissions
+  </Tab>
+  
+  <Tab title="Linux">
+    **GNOME**:
+    ```bash
+    # Install AppIndicator extension
+    sudo apt install gnome-shell-extension-appindicator
+    
+    # Enable the extension
+    gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com
+    
+    # Restart GNOME Shell (X11 only)
+    # Press Alt+F2, type 'r', press Enter
+    
+    # For Wayland, logout and login
+    ```
+    
+    **KDE Plasma**:
+    ```bash
+    # Add system tray widget
+    # Right-click panel > Add Widgets > System Tray
+    
+    # Restart plasmashell
+    kquitapp5 plasmashell && plasmashell &
+    ```
+    
+    **XFCE**:
+    ```bash
+    # Add notification area
+    # Right-click panel > Panel > Add New Items
+    # Select "Notification Area"
+    ```
+  </Tab>
+</Tabs>
+
+### Tray Menu Not Working
+
+- **Right-click doesn't show menu**: Try left-click or check if your desktop environment has special tray handling
+- **Menu appears in wrong location**: Known Tauri issue on some Linux DEs, menu should still be functional
+- **Menu items grayed out**: Window state issue, try restarting the application
+
+### Window Won't Show After Tray Click
+
+```bash
+# Check if window exists but is off-screen
+# The window may be on a disconnected monitor
+
+# Reset window position (requires development build)
+# Manually edit config or delete window state cache
+```
+
+**Workaround**:
+1. Right-click tray icon
+2. Click "Quit"
+3. Restart the application
+
+### Tray Icon Duplicated
+
+This can happen after crashes or improper shutdown:
+
+```bash
+# Kill all instances
+pkill print-my-bridge  # Linux/macOS
+taskkill /f /im print-my-bridge.exe  # Windows
+
+# Start fresh instance
+./print-my-bridge
+```
+
+Reference: The application includes duplicate prevention logic at `src-tauri/src/main.rs:113` using `app.tray_by_id("main-tray").is_none()`.
+
+## Best Practices
+
+### For Users
+
+- **Pin the tray icon**: Make Print My Bridge always visible in your system tray for quick access
+- **Use keyboard shortcuts**: Consider configuring global hotkeys to show/hide the window
+- **Monitor status**: Check the tray icon regularly to ensure the service is running
+- **Background operation**: Take advantage of minimize-to-tray to keep the service running without screen clutter
+
+### For Administrators
+
+- **Server deployments**: Use [headless mode](/usage/headless-mode) instead of relying on system tray
+- **Remote systems**: The tray icon requires a display server, use systemd or other service managers
+- **Automated setups**: Disable minimize-to-tray in configuration for predictable close behavior
+
+## Related Features
+
+- [Desktop Application](/usage/desktop-app): Full GUI features and settings
+- [Headless Mode](/usage/headless-mode): Running without GUI for server deployments
+- [Auto-Start Configuration](/usage/desktop-app#auto-start-configuration): Launch at system startup

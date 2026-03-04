@@ -1,0 +1,213 @@
+---
+title: List Printers
+description: Retrieve a list of available printers and their capabilities
+---
+
+## Overview
+
+The printers endpoint returns a list of all printers available on the system, including their status, capabilities, and whether they are set as the default printer. This information is essential for determining which printer to use when submitting print jobs.
+
+## Endpoint
+
+```http
+GET /api/printers
+```
+
+## Authentication
+
+**Required.** This endpoint requires a valid API token to be included in the request header.
+
+```http
+x-api-token: YOUR_API_TOKEN
+```
+
+## Response
+
+Returns an array of printer objects.
+
+<ResponseField name="name" type="string" required>
+  The system name of the printer. Use this value when specifying a printer in print requests.
+</ResponseField>
+
+<ResponseField name="status" type="string" required>
+  The current status of the printer. Possible values:
+  - `idle` - Printer is ready and available
+  - `busy` - Printer is currently processing a job
+  - `disabled` - Printer is disabled or offline
+  - `unknown` - Status could not be determined
+</ResponseField>
+
+<ResponseField name="is_default" type="boolean" required>
+  Indicates whether this printer is set as the system default printer. If `true`, print jobs that don't specify a printer will use this one.
+</ResponseField>
+
+<ResponseField name="supports_color" type="boolean" required>
+  Indicates whether the printer supports color printing. If `false`, documents will be printed in black and white.
+</ResponseField>
+
+<ResponseField name="paper_sizes" type="array" required>
+  List of paper sizes supported by this printer. Common values include:
+  - `A4` - 210 × 297 mm (European standard)
+  - `Letter` - 8.5 × 11 inches (US standard)
+  - `Legal` - 8.5 × 14 inches
+  - `A3` - 297 × 420 mm
+  
+  Each printer returns its specific supported sizes based on its capabilities.
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET http://localhost:8765/api/printers \
+  -H "x-api-token: your-api-token-here"
+```
+
+## Example Response
+
+```json
+[
+  {
+    "name": "HP_LaserJet_Pro",
+    "status": "idle",
+    "is_default": true,
+    "supports_color": false,
+    "paper_sizes": ["Letter", "Legal", "A4"]
+  },
+  {
+    "name": "Canon_PIXMA",
+    "status": "idle",
+    "is_default": false,
+    "supports_color": true,
+    "paper_sizes": ["Letter", "A4", "4x6", "5x7"]
+  },
+  {
+    "name": "Office_Printer",
+    "status": "busy",
+    "is_default": false,
+    "supports_color": true,
+    "paper_sizes": ["Letter", "Legal", "A4", "A3"]
+  }
+]
+```
+
+## Use Cases
+
+### Select Default Printer
+
+Find the default printer to use for print jobs:
+
+```javascript
+const response = await fetch('http://localhost:8765/api/printers', {
+  headers: {
+    'x-api-token': 'your-api-token-here'
+  }
+});
+
+const printers = await response.json();
+const defaultPrinter = printers.find(p => p.is_default);
+
+if (defaultPrinter) {
+  console.log(`Default printer: ${defaultPrinter.name}`);
+} else {
+  console.log('No default printer configured');
+}
+```
+
+### Find Color Printer
+
+Select a color printer for printing documents with color:
+
+```javascript
+const printers = await getPrinters();
+const colorPrinters = printers.filter(p => 
+  p.supports_color && p.status === 'idle'
+);
+
+if (colorPrinters.length > 0) {
+  console.log('Available color printers:', colorPrinters.map(p => p.name));
+} else {
+  console.warn('No color printers available');
+}
+```
+
+### Check Printer Availability
+
+Verify a specific printer is available before submitting a job:
+
+```javascript
+async function isPrinterAvailable(printerName) {
+  const response = await fetch('http://localhost:8765/api/printers', {
+    headers: { 'x-api-token': 'your-api-token-here' }
+  });
+  
+  const printers = await response.json();
+  const printer = printers.find(p => p.name === printerName);
+  
+  if (!printer) {
+    return { available: false, reason: 'Printer not found' };
+  }
+  
+  if (printer.status !== 'idle') {
+    return { 
+      available: false, 
+      reason: `Printer is ${printer.status}` 
+    };
+  }
+  
+  return { available: true, printer };
+}
+```
+
+### Validate Paper Size
+
+Check if a printer supports a specific paper size:
+
+```javascript
+function supportsPaperSize(printer, paperSize) {
+  return printer.paper_sizes.includes(paperSize);
+}
+
+const printers = await getPrinters();
+const a3Printers = printers.filter(p => 
+  supportsPaperSize(p, 'A3') && p.status === 'idle'
+);
+```
+
+## Error Responses
+
+### 401 Unauthorized
+
+Returned when the API token is missing or invalid.
+
+```json
+{
+  "error": "Unauthorized",
+  "message": "Invalid or missing API token"
+}
+```
+
+### 429 Too Many Requests
+
+Returned when the rate limit has been exceeded.
+
+```json
+{
+  "error": "Rate limit exceeded",
+  "message": "Too many requests. Please try again later."
+}
+```
+
+### 500 Internal Server Error
+
+Returned when there's an error retrieving printer information from the system.
+
+```json
+{
+  "error": "PrinterError",
+  "message": "Failed to retrieve printer information"
+}
+```
+
+## Rate Limiting
+
+This endpoint is subject to rate limiting as configured in your Print My Bridge settings. By default, the limit is 60 requests per minute per IP address. If you exceed this limit, you will receive a 429 response and must wait before making additional requests.
